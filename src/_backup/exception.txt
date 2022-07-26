@@ -1,0 +1,47 @@
+    protected static _tags: Map<string, number>;
+        this._tags = CoreRepo.newMap<string, number>(`${LC.NAME}.CoreException`, 'tags');
+    protected static _isIn: boolean;
+    static get isIn(): boolean {return this._isIn;}
+    protected static _senderLambda: ExceptionSenderLambda;
+    static get tags(): RecLike<number> {
+        return Object.fromEntries(this._tags);
+    }
+    static occurred(err: Exception): void {
+        // todo tag'lere gore counts
+    }
+    static runSender(err: Error, req?: unknown): boolean {
+        if (!this._senderLambda) {
+            return false;
+        }
+        try {
+            return this._senderLambda(err, req);
+        } catch (e) {
+            Leyyo.native(e, 'exception.runSender', {error: Exception.simpleObject(err), req});
+            return true;
+        }
+    }
+    static setSenderLambda(value: ExceptionSenderLambda): void {
+        if (typeof value === 'function') {
+            this._senderLambda = value;
+        }
+    }
+    protected static _i18nLambda: ExceptionI18nLambda;
+    static runI18n(err: Error, req?: unknown): boolean {
+        if (!this._i18nLambda) {
+            return false;
+        }
+        try {
+            return this._i18nLambda(err, req);
+        } catch (e) {
+            Leyyo.native(e, 'exception.runI18n', {error: Exception.simpleObject(err), req});
+            return true;
+        }
+    }
+    static setI18nLambda(value: ExceptionI18nLambda): void {
+        if (typeof value === 'function') {
+            this._i18nLambda = value;
+        }
+    }
+    static log(err: Error, req?: unknown): void {
+        Leyyo.errorLog(err, {});
+    }
