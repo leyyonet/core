@@ -14,7 +14,7 @@ Core component for JavaScript/TypeScript
 - [x] Static Code Analysis: `Yes` *IntelliJ Code Inspections*
 - [x] DDD - Document Driven: `No`
 - [x] EDD - Exception Driven: `Yes`
-- [ ] TDD - Test Driven: `No` [go to test folder](./test/)
+- [ ] TDD - Test Driven: `No`
 
 ## Commands
 - ``npm run clear`` *// clears "dist" folder*
@@ -30,6 +30,6 @@ Core component for JavaScript/TypeScript
 - `LEYYO_REQ_RES`=custom, ie: express.request.custom
 
 ## Author
-- `Date` 2021-11-15
+- `Date` 2020-11-15
 - `Name` Mustafa Yelmer
-- `Repo` [github.com/mustafayelmer/core](https://github.com/mustafayelmer/core)
+- `Repo` [github.com/leyyonet/core](https://github.com/leyyonet/core)
