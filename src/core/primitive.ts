@@ -1,14 +1,12 @@
-import {ArraySome, FuncLike, Key, OneOrMore, PairLike, RecLike} from "../index-aliases";
+import {ArraySome, FuncLike, Key, ObjectLike, OneOrMore, PairLike, RecLike} from "../index-aliases";
 import {DeveloperException, Exception} from "../index-errors";
 import {
+    ArrayTypeOpt,
     CoreLike,
     CorePrimitiveLike,
-    LoggerLike,
-    TypeArrayOpt,
-    TypeChildOpt,
+    LoggerLike, ObjectTypeOpt,
     TypeEnumOpt,
     TypeFnLambda,
-    TypeObjectOpt,
     TypeOpt
 } from "../index-types";
 
@@ -90,7 +88,7 @@ export class CorePrimitive implements CorePrimitiveLike {
             if (v !== null) {
                 return v;
             }
-            if (/^[0-9]+$/.test(value)) {
+            if (/^\d+$/.test(value)) {
                 try {
                     return this._enumInMap(parseInt(value, 10), map);
                 } catch (e) {
@@ -118,7 +116,7 @@ export class CorePrimitive implements CorePrimitiveLike {
             if (v !== null) {
                 return v;
             }
-            if (/^[0-9]+$/.test(value)) {
+            if (/^\d+$/.test(value)) {
                 try {
                     return this._enumInArray(parseInt(value, 10), arr);
                 } catch (e) {
@@ -147,7 +145,7 @@ export class CorePrimitive implements CorePrimitiveLike {
             if (v !== null) {
                 return v;
             }
-            if (/^[0-9]+$/.test(value)) {
+            if (/^\d+$/.test(value)) {
                 try {
                     return this._enumInAlteration(parseInt(value, 10), alt);
                 } catch (e) {
@@ -176,7 +174,7 @@ export class CorePrimitive implements CorePrimitiveLike {
         }
         return this.raiseInvalidValue(value, this._EXPECTED_ANY, opt);
     }
-    array<T = unknown>(value: unknown, opt?: TypeArrayOpt): Array<T> {
+    array<T = ArraySome>(value: unknown|T, opt?: ArrayTypeOpt): T {
         if (this._lyy.is.empty(value)) {
             return null;
         }
@@ -189,8 +187,8 @@ export class CorePrimitive implements CorePrimitiveLike {
             case 'object':
                 if (Array.isArray(value)) {
                     opt = opt ?? {};
-                    const result = [] as Array<T>;
-                    const valueFn = opt?.children?.value?.fn as TypeFnLambda<T>;
+                    const result = [];
+                    const valueFn = opt.values?.fn as TypeFnLambda;
                     if (typeof valueFn !== "function") {
                         result.push(...value);
                     } else {
@@ -205,11 +203,11 @@ export class CorePrimitive implements CorePrimitiveLike {
                             }
                         });
                     }
-                    return result;
+                    return result as unknown as T;
                 }
                 return this.array([value], opt);
             case 'function':
-                return this.runFn<Array<T>>(v => this.array(v, opt), value, opt);
+                return this.runFn<T>(v => this.array(v, opt), value, opt);
         }
         return this.raiseInvalidValue(value, this._EXPECTED_ARRAY, opt);
     }
@@ -433,7 +431,7 @@ export class CorePrimitive implements CorePrimitiveLike {
         }
         return this.raiseInvalidValue(value, this._EXPECTED_NUMBER, opt);
     }
-    object<T = unknown>(value: unknown, opt?: TypeObjectOpt): RecLike<T> {
+    object<T = ObjectLike>(value: unknown|T, opt?: ObjectTypeOpt): T {
         if (this._lyy.is.empty(value)) {
             return null;
         }
@@ -445,7 +443,7 @@ export class CorePrimitive implements CorePrimitiveLike {
                     }
                 } else {
                     opt = opt ?? {};
-                    const keyOpt = {...(opt?.children?.key ?? {}), ...opt} as TypeChildOpt<Key>;
+                    const keyOpt = opt.keys ?? {};
                     if (typeof keyOpt.fn !== 'function') {
                         keyOpt.fn = (k, o) => {
                             if (!this._lyy.is.key(k)) {
@@ -453,30 +451,33 @@ export class CorePrimitive implements CorePrimitiveLike {
                                 this.raiseInvalidValue(k, ['string', 'number'], o, {key: k});
                             }
                             return k as Key;
-                        }
+                        };
                     }
-                    const valueOpt = {...(opt?.children?.value ?? {}), ...opt} as TypeChildOpt<T>;
+                    const valueOpt = opt.values ?? {};
                     if (typeof valueOpt.fn !== 'function') {
                         valueOpt.fn = (v) => {
                             return v as T;
                         }
                     }
-                    const result = {} as RecLike<T>;
-                    for (const [k, v] of Object.entries(value)) {
-                        keyOpt.field = opt.field ? `${opt.field}.${k}` : `${k}`;
-                        valueOpt.field = opt.field ? `${opt.field}.${k}` : `${k}`;
-                        try {
-                            result[keyOpt.fn(k, keyOpt)] = valueOpt.fn(v, valueOpt);
-                        } catch (e) {
-                            Exception.cast(e).raise(!opt.silent);
-                            result[k] = null;
+                    if (value.constructor.name === 'Object') {
+                        const result = {};
+                        for (const [k, v] of Object.entries(value)) {
+                            keyOpt.field = opt.field ? `${opt.field}.${k}` : `${k}`;
+                            valueOpt.field = opt.field ? `${opt.field}.${k}` : `${k}`;
+                            try {
+                                result[keyOpt.fn(k, keyOpt) as string] = valueOpt.fn(v, valueOpt);
+                            } catch (e) {
+                                Exception.cast(e).raise(!opt.silent);
+                                result[k] = null;
+                            }
                         }
+                        return result as T;
                     }
-                    return result;
+                    return value as unknown as T;
                 }
                 break;
             case 'function':
-                return this.runFn<RecLike<T>>(v => this.object(v, opt), value, opt);
+                return this.runFn<T>(v => this.object(v, opt), value, opt);
         }
         return this.raiseInvalidValue(value, ['object'], opt);
     }

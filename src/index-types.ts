@@ -1,6 +1,7 @@
 // noinspection JSUnusedGlobalSymbols
 
 import {
+    ArraySome,
     ClassLike,
     ClassOrName,
     Func0,
@@ -265,7 +266,7 @@ export interface CorePrimitiveLike extends CoreBaseLike {
 
     // region types
     any(value: unknown, opt?: TypeOpt): unknown;
-    array<T = unknown>(value: unknown, opt?: TypeArrayOpt): Array<T>;
+    array<T = ArraySome>(value: unknown|T, opt?: ArrayTypeOpt): T;
     boolean(value: unknown, opt?: TypeOpt): boolean;
     clazz(value: unknown, opt?: TypeOpt): string;
     date(value: unknown, opt?: TypeOpt): Date;
@@ -273,7 +274,7 @@ export interface CorePrimitiveLike extends CoreBaseLike {
     float(value: unknown, opt?: TypeOpt): number|null;
     func<T = FuncLike>(value: unknown, opt?: TypeOpt): T|null;
     integer(value: unknown, opt?: TypeOpt): number|null;
-    object<T = unknown>(value: unknown, opt?: TypeObjectOpt): RecLike<T>;
+    object<T = ObjectLike>(value: unknown|T, opt?: ObjectTypeOpt): T;
     string(value: unknown, opt?: TypeOpt): string;
     text(value: unknown, opt?: TypeOpt): string;
     // endregion types
@@ -281,13 +282,6 @@ export interface CorePrimitiveLike extends CoreBaseLike {
 }
 // endregion primitive
 
-// region type
-export interface CoreTypeLike extends CoreBaseLike {
-    // region is
-// endregion is
-
-}
-// endregion type
 // region processor
 export interface ProcessResult {
     success: number;
@@ -413,29 +407,36 @@ export interface FqnArgument {
 
 
 export interface TypeOpt extends RecLike {
-    indicator?: string;
     field?: string;
     silent?: boolean;
-    children?: Record<string, TypeChildOpt>;
+    required?: boolean;
 }
-export type TypeFnLambda<T = unknown, O extends TypeOpt = TypeOpt> = (value: unknown, opt?: O) => T;
-export interface TypeChildOpt<T = unknown> extends TypeOpt {
-    fn?: TypeFnLambda<T>;
+export type TypeFnLambda<V = unknown, O = TypeOpt> = (value: unknown|V, opt?: O) => V;
+
+interface TypeItemOpt<T = unknown, O = TypeOpt> extends TypeOpt {
+    fn?: TypeFnLambda<T, O>;
 }
 
-export interface TypeArrayChildOpt<V extends TypeChildOpt = TypeChildOpt> extends Record<string, TypeChildOpt> {
-    value?: V;
+export interface ArrayTypeOpt<V extends TypeOpt = TypeOpt> extends TypeOpt {
+    ignoreNullValues?: boolean;
+    onDuplicated?: 'allow'|'reject'|'unique';
+    delimited?: boolean|string;
+    minValues?: number;
+    maxValues?: number;
+    onMaxValues?: 'allow'|'reject'|'strip';
+    values?: TypeItemOpt<unknown, V>;
 }
-export interface TypeArrayOpt<V extends TypeChildOpt = TypeChildOpt> extends TypeOpt {
-    children?: TypeArrayChildOpt<V>;
+export interface ObjectTypeOpt<V extends TypeOpt = TypeOpt, K extends TypeOpt = TypeOpt> extends TypeOpt {
+    ignoreNullValues?: boolean;
+    keysOrdered?: boolean;
+    minItems?: number;
+    maxItems?: number;
+    onMaxItems?: 'allow'|'reject'|'strip';
+    values?: TypeItemOpt<unknown, V>;
+    keys?: TypeItemOpt<unknown, K>;
 }
-export interface TypeObjectChildOpt<K extends TypeChildOpt = TypeChildOpt, V extends TypeChildOpt = TypeChildOpt> extends Record<string, TypeChildOpt> {
-    key?: K;
-    value?: V;
-}
-export interface TypeObjectOpt<K extends TypeChildOpt = TypeChildOpt, V extends TypeChildOpt = TypeChildOpt> extends TypeOpt {
-    children?: TypeObjectChildOpt<K, V>;
-}
+
+
 
 export type TypeEnumAlt<T extends Key = Key> = RecLike<T>;
 export type TypeEnumMap<T extends Key = Key> = TypeEnumAlt<T>|Array<T>;

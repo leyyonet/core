@@ -96,7 +96,7 @@ declare namespace Express {
 /**
  * Referenced from Object
  * */
-export type ObjectLike = Object;
+export type ObjectLike = Object | RecLike;
 
 export interface ModelLike<I extends IdLike = Uuid> {
     id?: I;
