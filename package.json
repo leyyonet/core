@@ -1,6 +1,6 @@
 {
   "name": "@leyyo/core",
-  "version": "1.1.3",
+  "version": "2.0.1",
   "description": "Core component for JavaScript/TypeScript",
   "keywords": [
     "core",
@@ -23,13 +23,12 @@
   "scripts": {
     "clear": "rimraf dist",
     "lint": "eslint src/**/*.ts",
-    "build": "npm run clear && tsc && cp -rv src/assets dist/assets/",
+    "build": "npm run clear && tsc && [ -d \"./src/assets\" ] && cp -rv src/assets dist/assets/ || echo \"no assets\" ",
     "test": "jest --config=jest.json",
     "test:watch": "jest --watch --config=jest.json",
     "test:coverage": "jest --config=jest.json --coverage --coverageDirectory=coverage",
-    "simulate": "npm run lint && npm run build && node dist/server.js",
-    "run:js": "node dist/index.js",
-    "run:ts": "node -r ts-node/register src/index.ts",
+    "simulate": "node -r ts-node/register src/index.simulate.ts",
+    "start": "node -r ts-node/register src/index.ts",
     "~publish": "npm run build && npm publish -access=public"
   },
   "files": [
@@ -37,6 +36,7 @@
   ],
   "license": "ISC",
   "devDependencies": {
+    "@babel/preset-typescript": "^7.18.6",
     "@types/jest": "^28.1.4",
     "@types/node": "^18.0.0",
     "@typescript-eslint/eslint-plugin": "^5.30.0",
@@ -54,6 +54,7 @@
   },
   "dependencies": {
     "dotenv": "^16.0.1",
+    "reflect-metadata": "^0.1.13",
     "stacktrace-parser": "^0.1.10"
   }
 }

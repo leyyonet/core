@@ -2,8 +2,25 @@
 Core component for JavaScript/TypeScript
 
 ## Leyyo > Core
+- Generics in Runtime
+- Dependency Injection
+- Extended Reflection
+- FQN (Fully Qualified Name)
+- Binder & Auto Bindings
+- Decorator Manager & Aliases
+- DTO Manager
+- Logger on Demand
+- Exception Handling
+- Mixin
+- Package Manager
+- Primitives
+- Central InMemory Storage
+- Symbol Manager
+- System Values
+- Hook Manager
+- Enumeration & Literal Registry
 
-## TODO
+## TODO & UnderConstruction
 
 ## Install
 ``npm i @leyyo/core``
@@ -24,10 +41,8 @@ Core component for JavaScript/TypeScript
 - ``npm run test:watch`` *// runs test with watch option
 - ``npm run test:coverage`` *// runs test with coverage
 
-#Used Environments
+## Environments
 - `NODE_ENV` environment, prod|staging|dev|test|local
-- `LEYYO_DEBUG`=boolean
-- `LEYYO_REQ_RES`=custom, ie: express.request.custom
 
 ## Author
 - `Date` 2020-11-15

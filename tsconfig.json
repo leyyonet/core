@@ -18,6 +18,9 @@
     "dist",
     "src/assets",
     "src/_backup",
+    "src/simulate",
+    "src/**/*dev/*",
+    "src/**/*.simulate.ts",
     "src/**/*.spec.ts"
   ]
 }

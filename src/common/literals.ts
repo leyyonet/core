@@ -1,0 +1,1 @@
+export type TypeOfLike = 'undefined' | 'string' | 'object' | 'number' | 'boolean' | 'function' | 'symbol' | 'bigint';
