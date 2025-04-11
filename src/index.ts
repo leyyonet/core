@@ -1,20 +1,28 @@
-import dotenv from 'dotenv';
-import {leyyo} from './core';
+import {load1, load2} from "./load";
+import {is} from "@leyyo/common";
+import {core} from "./core";
 
-if (global?.leyyo_is_testing) {
-    dotenv.config({path: __dirname + '/../test/.env'});
-    ['log', 'warn', 'info', 'debug', 'trace', 'error', 'native']. forEach(name => {global.console[name] = (): void => {};});
-} else {
-    dotenv.config();
-}
-export * from './index-aliases';
-export * from './index-annotations';
-export * from './index-constants';
-export * from './index-errors';
-export * from './index-enums';
-export * from './index-functions';
-export * from './index-types';
-export * from './instance';
+is.empty([load1, load2]);
 
-const {logger, hook, system} = leyyo;
-export {dotenv, leyyo, logger, hook, system};
+export const decorator = core.decorator;
+export const footprint = core.footprint;
+export const fqn = core.fqn;
+export const injection = core.injection;
+export const reflection = core.reflection;
+// noinspection JSUnusedGlobalSymbols
+export const ruler = core.ruler;
+export const callback = core.callback;
+export const enumeration = core.enumeration;
+export const proxy = core.proxy;
+export const bind = core.bind;
+
+export * from './callback';
+export * from './decorator';
+export * from './footprint';
+export * from './fqn';
+export * from './injection';
+export * from './reflection';
+export * from './ruler';
+export * from './enum';
+export * from './proxy';
+export * from './bind';
