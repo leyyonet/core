@@ -1,2 +1,2 @@
-export * from './index-types';
-export * from './decorator-pool';
+export * from './index.types';
+export * from './decorator.pool';

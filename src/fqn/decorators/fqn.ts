@@ -1,24 +1,12 @@
-import {Func, to} from "@leyyo/common";
+import {$assert, $dev} from "@leyyo/common";
 import {core} from "../../core";
 import {DecoIdLike, DecoInstanceLike} from "../../decorator";
 import {FQN_PCK} from "../internal";
+import {$$coreInternalOn} from "../../internal";
 
-// console.log(__filename);
 
-interface Opt {
+interface O {
     path: string;
-}
-
-const _run = (ins: DecoInstanceLike<Opt>, target: unknown, path: string) => {
-    core.fqn.clazz(target as Func, path);
-    ins.set({path: to.text(path, {deco: ins.description})});
-}
-
-const _init = () => {
-    if (!decoFqn) {
-        core.fqn.decorator(Fqn, FQN_PCK);
-        decoFqn = core.decorator.addIdentifier<Opt>(Fqn, ['class', 'no-multiple', 'no-inherited']);
-    }
 }
 
 /**
@@ -27,10 +15,22 @@ const _init = () => {
  * Class fqn will be `{prefixes}.{class}`
  */
 export function Fqn(path: string): ClassDecorator {
-    _init();
-    return (target: unknown) => {
-        _run(decoFqn.fork(target), target, path);
-    };
+    return clazz =>
+        id.process([clazz], {path});
 }
 
-let decoFqn: DecoIdLike<Opt>;
+let id: DecoIdLike<O>;
+
+$$coreInternalOn('deco-id', () => {
+    id = core.decoratorPool.newId<O>(Fqn)
+        .fqn(FQN_PCK)
+        .targets('class')
+        .rules('no-multiple', 'no-inherited')
+        .processor((ins: DecoInstanceLike<O>, p: O) => {
+            $assert.text(p.path, () => $dev.desc(ins, {field: 'path'}));
+            const clazz = ins.asClass.creator;
+            core.fqnHandler.clazz(clazz, p.path);
+
+            ins.set(p);
+        });
+});

@@ -1,2 +1,2 @@
-export * from './index-types';
-export * from './ruler-pool';
+export * from './index.types';
+export * from './ruler.pool';

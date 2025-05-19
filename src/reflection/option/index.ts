@@ -1,2 +1,2 @@
 export * from './index-types';
-export * from './reflection-option';
+export * from './reflection.option';

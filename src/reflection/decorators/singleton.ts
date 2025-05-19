@@ -1,71 +1,69 @@
+import {$assert, $dev, Arr, ClassLike, Obj} from "@leyyo/common";
 import {core} from "../../core";
-import {Arr, ClassLike, Obj, to} from "@leyyo/common";
 import {DecoIdLike, DecoInstanceLike} from "../../decorator";
 import {FQN_PCK} from "../internal";
+import {$$coreInternalOn} from "../../internal";
 
-// console.log(__filename);
 
-interface Opt {
+interface O {
     throwing?: boolean;
 }
 
 const _cache: Map<ClassLike, Obj> = new Map<ClassLike, Obj>();
 
-const _run = (ins: DecoInstanceLike<Opt>, throwing: boolean): ClassLike => {
-    ins.set({throwing: to.boolean(throwing, {deco: ins.description, throwing})});
-    const reflection = ins.asClass();
-    if (reflection.creator['ins'] === undefined) {
-        reflection.creator['ins'] = () => {
-            if (!_cache.has(reflection.creator)) {
-                _cache.set(reflection.creator, new newClass());
-            }
-            return _cache.get(reflection.creator);
-        }
-    }
-
-    const newClass = class extends reflection.creator {
-        constructor(...args: Arr) {
-            super(...args);
-            const opt = decoSingleton.valueByClass(reflection.name);
-            if (_cache.has(newClass)) {
-                if (opt.throwing) {
-                    throw new Error(`Singleton:${ins.description}`);
-                }
-                return _cache.get(newClass);
-            } else if (_cache.has(reflection.creator)) {
-                if (opt.throwing) {
-                    throw new Error(`Singleton:${ins.description}`);
-                }
-                return _cache.get(reflection.creator);
-            }
-            const ref = core.reflection.fetchValue(newClass);
-            if (ref) {
-                const instance = ref.create(...args);
-                _cache.set(newClass, instance);
-                _cache.set(reflection.creator, instance);
-                return instance;
-            }
-            throw new Error('Not known');
-        }
-    }
-    // sign proxy (build relation between old and new)
-    core.reflection.addProxy(reflection.creator, newClass);
-    return newClass;
-}
-
-const _init = () => {
-    if (!decoSingleton) {
-        core.fqn.decorator(Singleton, FQN_PCK);
-        decoSingleton = core.decorator.addIdentifier<Opt>(Singleton, ['class', 'no-multiple', 'no-inherited'])
-    }
-}
-
 export function Singleton(throwing: boolean = true): ClassDecorator {
-    _init();
-    return <ClassDecorator>((target) => {
-        return _run(decoSingleton.fork(target), throwing);
-    });
+    return (target =>
+        id.process([target], {throwing}));
 }
 
-let decoSingleton: DecoIdLike<Opt>;
+let id: DecoIdLike<O>;
 
+$$coreInternalOn('deco-id', () => {
+    id = core.decoratorPool.newId<O>(Singleton)
+        .fqn(FQN_PCK)
+        .targets('class')
+        .rules('no-multiple', 'no-inherited', 'no-cloneable')
+        .processor<ClassLike>((ins: DecoInstanceLike<O>, p: O) => {
+            $assert.booleanOptional(p.throwing, () => $dev.desc(ins, {field: 'throwing'}));
+
+            ins.set(p);
+            const ref = ins.asClass;
+            if (ref.creator['ins'] === undefined) {
+                ref.creator['ins'] = () => {
+                    if (!_cache.has(ref.creator)) {
+                        _cache.set(ref.creator, new newClass());
+                    }
+                    return _cache.get(ref.creator);
+                }
+            }
+
+            const newClass = class extends ref.creator {
+                constructor(...args: Arr) {
+                    super(...args);
+                    const opt = id.valueByClass(ref.name);
+                    if (_cache.has(newClass)) {
+                        if (opt.throwing) {
+                            throw new Error(`Singleton:${ins.description}`);
+                        }
+                        return _cache.get(newClass);
+                    } else if (_cache.has(ref.creator)) {
+                        if (opt.throwing) {
+                            throw new Error(`Singleton:${ins.description}`);
+                        }
+                        return _cache.get(ref.creator);
+                    }
+                    const ref2 = core.reflectionPool.get(newClass);
+                    if (ref2) {
+                        const instance = ref2.create(...args);
+                        _cache.set(newClass, instance);
+                        _cache.set(ref.creator, instance);
+                        return instance;
+                    }
+                    throw new Error('Not known');
+                }
+            }
+            // sign proxy (build relation between old and new)
+            core.reflectionPool.addProxy(ref.creator, newClass);
+            return newClass;
+        });
+});

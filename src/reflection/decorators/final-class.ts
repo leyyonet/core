@@ -1,51 +1,49 @@
+import {$assert, $descriptor, $dev, Arr, ClassLike} from "@leyyo/common";
 import {core} from "../../core";
-import {Arr, ClassLike, Func, to} from "@leyyo/common";
-import {FQN_PCK, ReflectionFinalClass} from "../internal";
-import {DecoIdLike, DecoInstanceLike} from "../../decorator";
+import {FQN_PCK} from "../internal";
+import {DecoIdLike} from "../../decorator";
+import {$$coreInternalOn} from "../../internal";
+import {FinalClassSign} from "../index.symbols";
 
-// console.log(__filename);
 
-
-interface Opt {
+interface O {
     throwing?: boolean;
 }
 
-const _run = (ins: DecoInstanceLike<Opt>, throwing: boolean): ClassLike => {
-    ins.set({throwing: to.boolean(throwing, {deco: ins.description, throwing})});
-    const reflection = ins.asClass();
-    const newClass = class extends reflection.creator {
-        constructor(...args: Arr) {
-            super(...args);
-            if (![newClass, reflection.creator].includes(this.constructor as ClassLike)) {
-                const val = decoFinalClass.valueByClass(reflection.creator);
-                if (val.throwing) {
-                    throw new Error(`NotInstantiable:${ins.description}`);
+export function FinalClass(throwing?: boolean): ClassDecorator {
+    return clazz =>
+        id.process([clazz], {throwing})
+}
+
+let id: DecoIdLike<O>;
+$$coreInternalOn('deco-id', () => {
+    id = core.decoratorPool.newId<O>(FinalClass)
+        .fqn(FQN_PCK)
+        .targets('class')
+        .rules('no-multiple', 'no-inherited', 'changes-structure')
+        .processor<ClassLike>((ins, p) => {
+            $assert.booleanOptional(p.throwing, () => $dev.desc(ins, {field: 'throwing'}));
+            ins.set(p);
+
+            const ref = ins.asClass;
+            const newClass = class extends ref.creator {
+                constructor(...args: Arr) {
+                    super(...args);
+                    if (![newClass, ref.creator].includes(this.constructor as ClassLike)) {
+                        const val = id.valueByClass(ref.creator);
+                        if (val.throwing) {
+                            throw new Error(`FinalClass:${ins.description}`);
+                        }
+                    }
                 }
             }
-        }
-    }
-    // sign proxy (build relation between old and new)
-    core.reflection.addProxy(reflection.creator, newClass);
+            // sign proxy (build relation between old and new)
+            core.reflectionPool.addProxy(ref.creator, newClass);
 
-    // set new and old class as final class
-    core.footprint.saveSign(newClass, ReflectionFinalClass, true);
-    core.footprint.saveSign(reflection.creator, ReflectionFinalClass, true);
+            // set new and old class as final class
+            $descriptor.save(newClass, FinalClassSign, true);
+            $descriptor.save(ref.creator, FinalClassSign, true);
 
-    return newClass;
-}
-
-const _init = () => {
-    if (!decoFinalClass) {
-        core.fqn.decorator(FinalClass, FQN_PCK);
-        decoFinalClass = core.decorator.addIdentifier<Opt>(FinalClass, ['class', 'no-multiple', 'no-inherited']);
-    }
-}
-
-export function FinalClass(throwing?: boolean): ClassDecorator {
-    _init();
-    return <ClassDecorator>((trg: Func) => {
-        return _run(decoFinalClass.fork(trg), throwing);
-    });
-}
-
-let decoFinalClass: DecoIdLike<Opt>;
+            return newClass;
+        });
+});

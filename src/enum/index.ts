@@ -1,2 +1,3 @@
-export * from './index-types';
-export * from './enum-pool';
+export * from './index.types';
+export * from './index.symbols';
+export * from './enum.pool';

@@ -1,27 +1,20 @@
+import {$descriptor, $dev, $repo, $sys, ClassLike, Dict, Func, Obj} from "@leyyo/common";
 import {AbstractReflection} from "../abstract";
 import {PropertyReflection, PropertyReflectionLike} from "../property";
-import {
-    DecoFilter,
-    DecoFilterBelongs,
-    DecoFilterKind,
-    DecoInstanceLike,
-    DecoKeyword,
-    DecoKind,
-    DecoLike
-} from "../../decorator";
-import {ClassLike, DeveloperException, Dict, Func, Obj, system} from "@leyyo/common";
-import {ClassReflectionLike, ClassReflectionSecure} from "./index-types";
+import {DecoFilter, DecoFilterKind, DecoKeyword, DecoKind} from "../../decorator";
+import {ClassReflectionLike, ClassReflectionSecure} from "./index.types";
 import {core} from "../../core";
 import {FootprintInspected} from "../../footprint";
+import {$$coreInternalOn} from "../../internal";
+import {FQN_PCK} from "../internal";
 
-// console.log(__filename);
 
 // noinspection Annotator
 export class ClassReflection extends AbstractReflection implements ClassReflectionLike, ClassReflectionSecure {
     // region properties
 
     private readonly _parent: ClassReflectionLike;
-    private readonly _body: Obj;
+    private _body: Obj;
     private readonly _creator: ClassLike;
     private readonly _inspected: FootprintInspected;
     private readonly _instanceMap: Map<PropertyKey, PropertyReflectionLike>;
@@ -29,24 +22,36 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
     private readonly _propCache: Map<PropertyKey, Array<PropertyReflectionLike>>;
     // endregion properties
     // region methods
-    constructor(creator: ClassLike, body?: Obj, currentInstance?: DecoInstanceLike) {
-        super(currentInstance);
+    constructor(creator: ClassLike, prototype?: Obj) {
+        super(creator.name);
         this._target = 'class';
-        this._instanceMap = new Map<PropertyKey, PropertyReflectionLike>();
-        this._staticMap = new Map<PropertyKey, PropertyReflectionLike>();
-        this._propCache = new Map<PropertyKey, Array<PropertyReflectionLike>>();
+        this._instanceMap = $repo.newMap(FQN_PCK, this._code, 'instance');
+        this._staticMap = $repo.newMap(FQN_PCK, this._code, 'static');
+        this._propCache = $repo.newMap(FQN_PCK, this._code, 'cache');
         this._creator = creator;
         this._type = creator as Func;
-        this._body = body;
+        this._body = prototype ?? creator.prototype;
         this._inspected = core.footprint.inspect(creator);
         const prototypeOf = Object.getPrototypeOf(creator);
         // console.log(`${creator.name}.prototypeOf => ${typeof prototypeOf}`);
-        if (prototypeOf && prototypeOf.name && !system.isSysClass(prototypeOf.name)) {
-            this._parent = core.reflection.registerClass(prototypeOf);
+        if (prototypeOf && prototypeOf.name && !$sys.isSysClass(prototypeOf.name)) {
+            this._parent = core.reflectionPool.registerClass(prototypeOf);
+            const oldDocs = this._parent.docsAll();
+            if (oldDocs.length > 0) {
+                oldDocs.forEach(doc => {
+                    this.setValue(doc.ins, doc);
+                });
+            }
         }
+        if (!core.fqnHandler.exists(this._creator)) {
+            core.fqnHandler.onReady(this._creator, (name: string) => {
+                this._name = name;
+            });
+        }
+
         // region instance-members
         Object.getOwnPropertyNames(creator.prototype).forEach(key => {
-            const desc = core.footprint.getDescriptor(creator.prototype, key);
+            const desc = $descriptor.get(creator.prototype, key);
             if (desc) {
                 let kind: DecoKind;
                 let callable: Func;
@@ -64,7 +69,7 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
         // region static-members
         Object.getOwnPropertyNames(creator).forEach(key => {
             if (!['length', 'name'].includes(key)) {
-                const desc = core.footprint.getDescriptor(creator, key);
+                const desc = $descriptor.get(creator, key);
                 if (desc) {
                     let kind: DecoKind;
                     let callable: Func;
@@ -112,8 +117,8 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
         const rec = {
             ...{
                 name: this.name,
-                creator: core.fqn.detail(this._creator),
-                body: detailed ? core.fqn.detail(this._body) : undefined,
+                creator: core.fqnHandler.detail(this._creator),
+                body: detailed ? core.fqnHandler.detail(this._body) : undefined,
                 instances: [],
                 statics: []
             }, ...super.info(detailed)
@@ -132,10 +137,15 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
 
     get name(): string {
         if (!this._name) {
-            this._name = core.fqn.get(this._creator);
+            this._name = core.fqnHandler.get(this._creator);
         }
         return this._name;
     }
+
+    get code(): string {
+        return this.name;
+    }
+
 
     get description(): string {
         return `<class>${this.name}`;
@@ -197,7 +207,7 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
 
     // endregion static-properties
     // region any-properties
-    listAnyProperties(filter?: DecoFilter, decorator?: Func|string): Array<PropertyReflectionLike> {
+    listAnyProperties(filter?: DecoFilter, decorator?: Func | string): Array<PropertyReflectionLike> {
         let properties: Array<PropertyReflectionLike>;
         switch (filter?.keyword) {
             case "instance":
@@ -264,39 +274,51 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
                 }
                 return this._staticMap.get(name);
             default:
-                throw new DeveloperException('invalid.keyword', {clazz: this.name, property: name});
+                throw $dev.developerError({
+                    issue: 'invalid.keyword',
+                    where: 'leyyo.reflection.ClassReflection',
+                    keyword,
+                    clazz: this.name,
+                    property: name
+                });
         }
     }
 
-    $filterDecorators(filter?: DecoFilterBelongs): Map<DecoLike, Array<Dict>> {
-        switch (filter?.belongs) {
-            case "self":
-                return this._decoratorMap;
-            case "parent":
-                if (this._parent) {
-                    return this._parent.$secure.$filterDecorators(filter);
-                } else {
-                    return this._emptyDecoMap;
-                }
-            default:
-                if (this._parent) {
-                    return new Map<DecoLike, Array<Dict>>([...this._decoratorMap, ...this._parent.$secure.$filterDecorators(filter)]);
-                } else {
-                    return this._decoratorMap;
-                }
+    $usePrototypeAsBody(): void {
+        if (!this._body) {
+            this._body = this.creator.prototype;
         }
     }
-
-    $setCurrentInstance(currentInstance: DecoInstanceLike): this {
-        this._currentInstance = currentInstance;
-        return this;
-    }
-
-    $setForCurrentDecorator<V extends Dict>(value: V): this {
-        return this.setValue(this.currentIdentifier?.fn, value);
-    }
-
 
     // endregion secure
 
+    toJSON(simple?: boolean) {
+        if (simple) {
+            return {
+                ...{
+                    parent: this._parent?.description,
+                    creator: this._creator?.name,
+                    inspected: this._inspected,
+
+                    instanceMembers: Array.from(this._instanceMap.values()).map(c => c.toJSON(true)),
+                    staticMembers: Array.from(this._staticMap.values()).map(c => c.toJSON(true))
+                }, ...super.toJSON()
+            };
+        }
+        return {
+            ...{
+                __: ClassReflection.name,
+                parent: this._parent?.description,
+                creator: this._creator?.name,
+                inspected: this._inspected,
+
+                instanceMembers: Array.from(this._instanceMap.values()),
+                staticMembers: Array.from(this._staticMap.values()),
+            }, ...super.toJSON()
+        };
+    }
 }
+
+$$coreInternalOn('class-instance', () => {
+    core.fqnHandler.clazz(ClassReflection, FQN_PCK);
+});

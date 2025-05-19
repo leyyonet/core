@@ -1,29 +1,22 @@
-import {Arr, ClassLike, Dict, Func, Obj} from "@leyyo/common";
-import {DecoInstanceLike} from "../instance";
-import {
-    ClassReflectionLike,
-    CoreReflectionLike,
-    ParameterReflectionLike,
-    PropertyReflectionLike
-} from "../../reflection";
-import {Forbidden, Target} from "../literals";
+import {ClassLike, Dict, Func, Obj} from "@leyyo/common";
+import {DecoArguments, DecoInstanceLike} from "../instance";
+import {ClassReflectionLike, ParameterReflectionLike, PropertyReflectionLike} from "../../reflection";
+import {DecoRule, Target} from "../literals";
 import {DecoIdLike} from "../identifier";
 import {DecoCloneLike} from "../clone";
 
 /**
- * DecoratorPool property keyword type
- * - static: static property
- * - instance: instance property
- *
- * @internal
+ * Decorator keyword type, it's used during filter
  * */
-export type DecoKeyword = 'static' | 'instance';
+export type DecoKeyword =
+/** Static property */
+    'static'
+    /** Instance property */
+    | 'instance';
 /**
  * DecoratorPool property type
  * - field: field property so type is not a function
  * - method: method property so type is a function
- *
- * @internal
  * */
 export type DecoKind = 'field' | 'method';
 
@@ -32,14 +25,13 @@ export type DecoKind = 'field' | 'method';
  * - self: filter for only self values of any-reflection
  * - parent: filter for only parent values of any-reflection
  * - all or any value
- * @internal
  * */
 export type DecoBelongs = 'self' | 'parent';
 
 export interface DecoFilterBelongs {
     /**
-     * If self, it searches in self values
-     * If parent, it searches in parent values
+     * - self, it searches in self values
+     * - parent, it searches in parent values
      * @see {@link DecoBelongs}
      * */
     /**
@@ -50,8 +42,8 @@ export interface DecoFilterBelongs {
 
 export interface DecoFilterKeyword {
     /**
-     * If static, it searches in only static properties
-     * If instance, it searches in only instance properties
+     * - static, it searches in only static properties
+     * - instance, it searches in only instance properties
      * @see {@link DecoKeyword}
      * */
     keyword?: DecoKeyword;
@@ -59,8 +51,8 @@ export interface DecoFilterKeyword {
 
 export interface DecoFilterKind {
     /**
-     * If field, it searches in only field properties
-     * If method, it searches in only method properties
+     * - field, it searches in only field properties
+     * - method, it searches in only method properties
      * @see {@link DecoKind}
      * */
     kind?: DecoKind;
@@ -71,65 +63,280 @@ export interface DecoFilterKind {
  * */
 export type DecoFilter = DecoFilterBelongs & DecoFilterKeyword & DecoFilterKind;
 
-export interface DecoLike<V extends Dict = Dict> {
+export interface DecoLike<V = Dict, M = Dict, P = V> {
+    /**
+     * Description of decorator
+     * */
     get description(): string;
 
+    /**
+     * Function of decorator
+     * */
     get fn(): Func;
 
+    /**
+     * Name of decorator
+     * - if fqn is used then fqn
+     * - else function name
+     * */
     get name(): string;
-    get isIdentifier(): boolean;
-    get asIdentifier(): DecoIdLike;
-    get asClone(): DecoCloneLike;
 
     /**
-     * Forks a new instance from identifier
+     * Is decorator identifier, otherwise it's clone
      * */
-    fork(clazz: Obj | Func): DecoInstanceLike<V>; // class
-    fork(clazz: Obj | Func, propertyKey: PropertyKey): DecoInstanceLike<V>; // field
-    fork(clazz: Obj | Func, propertyKey: PropertyKey, descriptor: TypedPropertyDescriptor<unknown>): DecoInstanceLike<V>; // method
-    fork(clazz: Obj | Func, propertyKey: PropertyKey, index: number): DecoInstanceLike<V>; // parameter
-    fork(...descriptors: Arr): DecoInstanceLike<V>;
+    get isIdentifier(): boolean;
 
-    assign(coreReflect: CoreReflectionLike, value: V): void;
+    /**
+     * Casts it as an identifier if it's
+     * */
+    get asIdentifier(): DecoIdLike<V, M, P>;
+
+    /**
+     * Casts it as an identifier if it's
+     * */
+    get asClone(): DecoCloneLike<V, M, P>;
+
+    /**
+     * Forks a new instance for a class
+     *
+     * @param {ClassLike} clazz - Class
+     * */
+    fork(clazz: Obj | Func): DecoInstanceLike<V, M, P>; // class
+
+    /**
+     * @override
+     * Forks a new instance for a field
+     *
+     * @param {ClassLike} clazz - Class
+     * @param {string} property - field name
+     * */
+    fork(clazz: Obj | Func, property: PropertyKey): DecoInstanceLike<V, M, P>; // field
+    /**
+     * @override
+     * Forks a new instance for a method
+     *
+     * @param {ClassLike} clazz - Class
+     * @param {string} property - method name
+     * @param {number} descriptor - method function
+     *
+     * */
+    fork(clazz: Obj | Func, property: PropertyKey, descriptor: TypedPropertyDescriptor<unknown>): DecoInstanceLike<V, M, P>; // method
+    /**
+     * @override
+     * Forks a new instance for a parameter
+     *
+     * @param {ClassLike} clazz - Class
+     * @param {string} property - method name
+     * @param {number} index - parameter index
+     * */
+    fork(clazz: Obj | Func, property: PropertyKey, index: number): DecoInstanceLike<V, M, P>; // parameter
+    /**
+     * @inheritDoc
+     * @override
+     *
+     * Descriptors options
+     * - for class : [class]
+     * - for field : [class, property]
+     * - for method: [class, property, descriptor]
+     * - for param : [class, property, index]
+     * */
+    fork(descriptors: DecoArguments): DecoInstanceLike<V, M, P>;
 
     // endregion public
 
-    // region getter
-    get target(): Array<Target>;
+    // region target
+    /**
+     * Return allowed targets
+     * */
+    getTargets(): Array<Target>;
 
+    /**
+     * Sets allowed targets
+     *
+     * @param {Array<Target>} targets
+     * */
+    targets(...targets: Array<Target>): this;
+
+    /**
+     * Does decorator allow given targets
+     *
+     * @param {Array<Target>} targets
+     * */
     hasTarget(...targets: Array<Target>): boolean;
 
-    get forbidden(): Array<Forbidden>;
+    // endregion target
 
-    isForbidden(forbidden: Forbidden): boolean;
+    // region dirty
+    /**
+     * Sets fqn name as shortcut, it uses {@link FqnHandler#decorator}
+     *
+     * @param {string} pack - package name
+     * */
+    fqn(pack: string): this;
 
-    get instances(): Array<DecoInstanceLike>;
+    // endregion dirty
 
-    get keywords(): Array<string>;
-    addKeyword(...keywords: Array<string>): number;
-    hasKeyword(keyword: string): boolean;
+    // region dirty
+    /**
+     * Is any rule is changed?
+     * */
+    get isDirty(): boolean;
+
+    // endregion dirty
+
+    // region rule
+    /**
+     * Returns rules or constraints
+     * */
+    getRules(): Array<DecoRule>;
+
+    /**
+     * Have decorator given rules?
+     *
+     * @param {DecoRule} rule
+     * */
+    hasRule(rule: DecoRule): boolean;
+
+    // endregion rule
+
+    // region keyword
+    /**
+     * Returns keywords
+     * */
+    getKeywords(): Array<string|symbol>;
+
+    /**
+     * Have decorator given keywords?
+     *
+     * @param {string} keyword
+     * */
+    hasKeyword(keyword: string|symbol): boolean;
+
+    // endregion keyword
+
+    // region metadata
+    /**
+     * Returns metadata
+     * */
+    getMetadata<M2 = M>(): M2;
+
+    // endregion metadata
+
+    // region processor
+    /**
+     * Have decorator owned processor
+     * */
+    get hasProcessor(): boolean;
+
+    /**
+     * Process decorator
+     *
+     * @param {Array<any>} descriptors
+     * @param {Object} parameters - decorator arguments
+     *
+     * Descriptors options
+     * - for class : [class]
+     * - for field : [class, property]
+     * - for method: [class, property, descriptor]
+     * - for param : [class, property, index]
+     * */
+    process<R = void>(descriptors: Array<any>, parameters?: P): R;
+
+    /**
+     * @inheritDoc
+     *
+     * @param {DecoInstanceLike} ins
+     * @param {Object} parameters - decorator arguments
+     * */
+    process<R = void>(ins: DecoInstanceLike<V, M, P>, parameters?: P): R;
+
+    // endregion processor
 
     // endregion getter
 
     // region class
-    assignedClasses(filter?: DecoFilter): Array<ClassReflectionLike>; // class-name
-    valueByClass(fn: ClassLike | Func | string, filter?: DecoFilter): V;
+    /**
+     * Returns classes which use this decorator
+     *
+     * @param {DecoFilter} filter - optional filter
+     * */
+    assignedClasses(filter?: DecoFilter): Array<ClassReflectionLike>;
 
-    valuesByClass(fn: ClassLike | Func | string, filter?: DecoFilter): Array<V>;
+    /**
+     * Returns latest value of given class
+     *
+     * @param {ClassLike} clazz - Class
+     * @param {DecoFilter} filter - optional filter
+     * */
+    valueByClass(clazz: ClassLike | Func | string, filter?: DecoFilter): V;
+
+    /**
+     * Returns values of given class
+     *
+     * @param {ClassLike} clazz - Class
+     * @param {DecoFilter} filter - optional filter
+     * */
+    valuesByClass(clazz: ClassLike | Func | string, filter?: DecoFilter): Array<V>;
 
     // endregion class
     // region property
-    assignedProperties(filter?: DecoFilter): Array<PropertyReflectionLike>; // class-name, property-name
-    valueByProperty(fn: Func | string, propName: PropertyKey, filter?: DecoFilter): V;
+    /**
+     * Returns properties which use this decorator
+     *
+     * @param {DecoFilter} filter - optional filter
+     * */
+    assignedProperties(filter?: DecoFilter): Array<PropertyReflectionLike>;
 
-    valuesByProperty(fn: Func | string, propName: PropertyKey, filter?: DecoFilter): Array<V>;
+    /**
+     * Returns latest value of given class' property
+     *
+     * @param {ClassLike} clazz - Class
+     * @param {string} property - property name [field or method]
+     * @param {DecoFilter} filter - optional filter
+     * */
+    valueByProperty(clazz: Func | string, property: PropertyKey, filter?: DecoFilter): V;
+
+    /**
+     * Returns values of given class' property
+     *
+     * @param {ClassLike} clazz - Class
+     * @param {string} property - property name [field or method]
+     * @param {DecoFilter} filter - optional filter
+     * */
+    valuesByProperty(clazz: Func | string, property: PropertyKey, filter?: DecoFilter): Array<V>;
 
     // endregion property
     // region parameter
-    assignedParameters(filter?: DecoFilter): Array<ParameterReflectionLike>; // class-name, property-name, index
-    valueByParameter(fn: Func | string, propName: PropertyKey, index: number, filter?: DecoFilter): V;
+    /**
+     * Returns parameters which use this decorator
+     *
+     * @param {DecoFilter} filter - optional filter
+     * */
+    assignedParameters(filter?: DecoFilter): Array<ParameterReflectionLike>;
 
-    valuesByParameter(fn: Func | string, propName: PropertyKey, index: number, filter?: DecoFilter): Array<V>;
+    /**
+     * Returns latest value of given parameter
+     *
+     * @param {ClassLike} clazz - Class
+     * @param {string} property - method name
+     * @param {number} index - parameter index
+     * @param {DecoFilter} filter - optional filter
+     * */
+    valueByParameter(clazz: Func | string, property: PropertyKey, index: number, filter?: DecoFilter): V;
+
+    /**
+     * Returns values of given parameter
+     *
+     * @param {ClassLike} clazz - Class
+     * @param {string} property - method name
+     * @param {number} index - parameter index
+     * @param {DecoFilter} filter - optional filter
+     * */
+    valuesByParameter(clazz: Func | string, property: PropertyKey, index: number, filter?: DecoFilter): Array<V>;
 
     // endregion parameter
+    toJSON(simple?: boolean): any;
+    clearInstances(): void;
 }
+
+export type DecoCLearType = 'inherited-selected' | 'inherited-all' | 'both-selected' | 'both-all';

@@ -1,2 +1,2 @@
-export * from './forbidden';
+export * from './deco-rule';
 export * from './target';

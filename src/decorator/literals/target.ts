@@ -1,4 +1,3 @@
-// console.log(__filename);
 /**
  * DecoratorPool target items
  * */

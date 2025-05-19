@@ -1,20 +1,24 @@
-import {commonLog, DeveloperException, Func, Obj, system} from "@leyyo/common";
+import {$descriptor, $dev, $log, Arr, Func} from "@leyyo/common";
 import {
     FootprintInspected,
     FootprintKeyword,
     FootprintLike,
     FootprintParamNameExtended,
     FootprintPrepared,
-    FootprintSecure,
-    PropDescriptor
-} from "./index-types";
-import {FootprintSignInspected} from "./internal";
-import {ReflectionFinalClass} from "../reflection/internal";
+    FootprintSecure
+} from "./index.types";
+import {FQN_PCK} from "./internal";
+import {core} from "../core";
+import {$$coreInternalOn} from "../internal";
+import {FootprintSign} from "./index.symbols";
+import {FinalClassSign} from "../reflection/index.symbols";
 
-// console.log(__filename);
 
 export class Footprint implements FootprintLike, FootprintSecure {
-    private readonly logger = commonLog.create(Footprint);
+    private readonly arrayFields = ['keywords', 'params'];
+    private readonly primitiveFields = ['proto', 'constructor', 'parent'];
+
+    private readonly logger = $log.create(Footprint);
 
     // region internal
     private _read(callback: Func, toStr = false): string | Func {
@@ -238,8 +242,8 @@ export class Footprint implements FootprintLike, FootprintSecure {
                 arr.push(collected);
             }
         }
-        console.log(`-----------------------`);
-        console.log(`found`, arr);
+        // console.log(`-----------------------`);
+        // console.log(`found`, arr);
         return arr;
     }
 
@@ -295,11 +299,13 @@ export class Footprint implements FootprintLike, FootprintSecure {
         } else if (className.includes(' extends ')) {
             inspected.keywords.push('inherited');
             inspected.parent = prepared.parent;
-        } else {
-            inspected.keywords.push('root');
         }
-        if (inspected.parent && this.getSign(inspected.parent, ReflectionFinalClass)?.value) {
-            throw new DeveloperException('final class is inherited', {class: inspected.parent.name});
+        if (inspected.parent && $descriptor.has(inspected.parent, FinalClassSign)) {
+            throw $dev.developerError({
+                issue: 'final.class.is.inherited',
+                clazz: inspected.parent.name,
+                where: 'leyyo.footprint.Footprint'
+            });
         }
     }
 
@@ -338,14 +344,16 @@ export class Footprint implements FootprintLike, FootprintSecure {
 
         }
         const paramNames = this._parseParamNames(prepared.paramLine);
-        const params = paramNames.map((p: string) => {
-            if (p.startsWith('...')) {
-                return [p.replace((/\./g), ''), 'variadic'] as FootprintParamNameExtended;
-            } else if (p.endsWith('=')) {
-                return [p.replace(/=/g, ''), 'default'] as FootprintParamNameExtended;
-            }
-            return p;
-        });
+        const params = paramNames
+            .map((p: string) => p.trim())
+            .map((p: string) => {
+                if (p.startsWith('...')) {
+                    return [p.replace((/\./g), '').trim(), 'variadic'] as FootprintParamNameExtended;
+                } else if (p.endsWith('=')) {
+                    return [p.replace(/=/g, '').trim(), 'default'] as FootprintParamNameExtended;
+                }
+                return p;
+            });
         if (prepared.proto) {
             prepared.keywords.push('system');
         }
@@ -373,26 +381,57 @@ export class Footprint implements FootprintLike, FootprintSecure {
 
     // region regular
     get(target: unknown, inspectWhenAbsent?: boolean): FootprintInspected {
-        const desc = this.$getDescriptor<FootprintInspected>(target, FootprintSignInspected);
-        if (desc) {
-            return {...desc.value}; // response cloned
+        let inspected = $descriptor.getValue<FootprintInspected>(target, FootprintSign);
+        if (inspected) {
+            return {...inspected}; // response cloned
         }
         if (inspectWhenAbsent) {
-            const inspected = this.inspect(target);
+            inspected = this.inspect(target);
             if (inspected) {
                 return {...inspected};
             }
         }
         return null;
     }
+
     isClass(target: unknown, volatile?: boolean): boolean {
         const inspect = this.inspect(target, volatile);
         return inspect?.type === 'class';
     }
+
     isAsync(target: unknown, volatile?: boolean): boolean {
         const inspect = this.inspect(target, volatile);
         return inspect?.keywords.includes('async');
     }
+
+    copy(source: unknown, target: unknown): boolean {
+        const inspected = core.footprint.inspect(source);
+        if (inspected) {
+            core.footprint.$secure.$save(target, inspected);
+            return true;
+        }
+        return false;
+    }
+
+    appendKeyword(target: unknown, keyword: symbol): void {
+        const inspect = this.inspect(target, false);
+        if (inspect) {
+            if (!Array.isArray(inspect.keywords)) {
+                inspect.keywords = [];
+            }
+            if (!inspect.keywords.includes(keyword)) {
+                inspect.keywords.push(keyword);
+            }
+        }
+    }
+    hasKeyword(target: unknown, keyword: FootprintKeyword|symbol): boolean {
+        const inspect = this.inspect(target, false);
+        if (inspect) {
+            return Array.isArray(inspect.keywords) && inspect.keywords.includes(keyword);
+        }
+        return false;
+    }
+
     inspect(target: unknown, volatile?: boolean): FootprintInspected {
         const existed = this.get(target);
         if (existed) {
@@ -411,106 +450,43 @@ export class Footprint implements FootprintLike, FootprintSecure {
             } else {
                 this._forOthers(prepared, inspected);
             }
+            this.arrayFields.forEach(f => {
+                if (inspected[f] && (inspected[f] as Arr).length < 1) {
+                    delete inspected[f].keywords;
+                }
+            });
+            this.primitiveFields.forEach(f => {
+                if (!inspected[f]) {
+                    delete inspected[f];
+                }
+            });
+
             if (!volatile) {
                 this.$save(target, inspected);
                 if (inspected.type === 'class') {
-                    this.logger.debug('inspected', {type: inspected.type, name: inspected.name, keywords: inspected.keywords});
+                    if (inspected.keywords) {
+                        this.logger.debug(`${inspected.name} is inspected as ${inspected.type}`, {
+                            keywords: inspected.keywords
+                        });
+                    } else {
+                        this.logger.debug(`${inspected.name} is inspected as ${inspected.type}`);
+                    }
                 }
             }
             return inspected;
         } catch (e) {
-            this.logger.warn(e, {indicator: 'footprint.inspect.error'});
+            this.logger.warn(e, {issue: 'footprint.inspect.error'});
             return null;
         }
     }
 
-    getDescriptor<T>(target: Func | Obj, key: string): PropDescriptor<T> {
-        if (typeof key !== 'string') {
-            return null;
-        }
-        return this.$getDescriptor<T>(target, key);
-    }
-
-    saveDescriptor<T>(target: Func | Obj, key: string, value: T): boolean {
-        if (typeof key !== 'string') {
-            return false;
-        }
-        return this.$saveDescriptor<T>(target, key, value);
-    }
-
-    getSign<T>(target: Func | Obj, key: symbol): PropDescriptor<T> {
-        if (typeof key !== 'symbol') {
-            return null;
-        }
-        return this.$getDescriptor<T>(target, key);
-    }
-
-    saveSign<T>(target: Func | Obj, key: symbol, value: T): boolean {
-        if (typeof key !== 'symbol') {
-            return false;
-        }
-        return this.$saveDescriptor<T>(target, key, value);
-    }
 
     // endregion regular
 
     // region secure
 
     $save(target: unknown, value: FootprintInspected): boolean {
-        return this.$saveDescriptor<FootprintInspected>(target, FootprintSignInspected, value);
-    }
-
-    $saveDescriptor<T>(target: Func | Obj, key: string | symbol, value: T): boolean {
-        if (!target ||
-            (!['string', 'symbol'].includes(typeof key)) ||
-            (key === ((typeof target === 'object') ? 'constructor' : 'prototype')) ||
-            system.isSysFunction(key as string)) {
-            return false;
-        }
-        try {
-            Object.defineProperty(target, key, {
-                value,
-                configurable: true,
-                writable: false,
-                enumerable: false
-            });
-        } catch (e) {
-            this.logger.warn(e, {indicator: 'footprint.save.descriptor.error', key});
-            return false;
-        }
-        return true;
-    }
-
-    $removeDescriptor(target: Func | Obj, key: string | symbol): boolean {
-        if (!target ||
-            (!['string', 'symbol'].includes(typeof key)) ||
-            (key === ((typeof target === 'object') ? 'constructor' : 'prototype')) ||
-            system.isSysFunction(key as string)) {
-            return false;
-        }
-        try {
-            if (Object.getOwnPropertyDescriptor(target, key)) {
-                delete target[key];
-                return true;
-            }
-        } catch (e) {
-            this.logger.warn(e, {indicator: 'footprint.remove.descriptor.error', key});
-        }
-        return false;
-    }
-    $getDescriptor<T>(target: Func | Obj, key: string | symbol): PropDescriptor<T> {
-        if (!target ||
-            (!['string', 'symbol'].includes(typeof key)) ||
-            (key === ((typeof target === 'object') ? 'constructor' : 'prototype')) ||
-            system.isSysFunction(key as string)) {
-            return null;
-        }
-        try {
-            return Object.getOwnPropertyDescriptor(target, key) ?? null;
-        } catch (e) {
-            this.logger.warn(e, {indicator: 'footprint.get.descriptor.error', key});
-        }
-        return null;
+        return $descriptor.save(target, FootprintSign, value);
     }
 
     get $back(): FootprintLike {
@@ -524,3 +500,10 @@ export class Footprint implements FootprintLike, FootprintSecure {
     // endregion secure
 
 }
+
+$$coreInternalOn('class-pool-2', () => {
+    core.$secure.$setFootprint(new Footprint());
+});
+$$coreInternalOn('class-instance', () => {
+    core.fqnHandler.clazz(Footprint, FQN_PCK);
+});

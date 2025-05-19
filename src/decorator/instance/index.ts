@@ -1,2 +1,2 @@
-export * from './index-types';
-export * from './deco-instance';
+export * from './index.types';
+export * from './deco.instance';

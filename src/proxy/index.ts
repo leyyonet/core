@@ -1,2 +1,3 @@
-export * from './index-types';
-export * from './core-proxy';
+export * from './index.types';
+export * from './index.symbols';
+export * from './proxy.handler';

@@ -1,3 +1,4 @@
-export * from './index-type';
-export * from './core-bind';
+export * from './index.types';
+export * from './index.symbols';
+export * from './bind.handler';
 export * from './decorators';

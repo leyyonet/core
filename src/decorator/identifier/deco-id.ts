@@ -1,43 +1,53 @@
-import {ClassLike, Dict, Func, is} from "@leyyo/common";
-import {DecoIdLike, DecoIdSecure} from "./index-types";
+import {$assert, $dev, $is, ClassLike, Dict, Func, List} from "@leyyo/common";
+import {DecoIdLike, DecoIdSecure, DecoProcessorLambda} from "./index.types";
 import {DecoInstance, DecoInstanceLike} from "../instance";
-import {
-    ClassReflectionLike,
-    CoreReflectionLike,
-    ParameterReflectionLike,
-    PropertyReflectionLike
-} from "../../reflection";
-import {Forbidden, Target} from "../literals";
+import {ClassReflectionLike, ParameterReflectionLike, PropertyReflectionLike} from "../../reflection";
+import {DecoRule, DecoRuleItems, Target, TargetItems} from "../literals";
 import {core} from "../../core";
 import {DecoFilter} from "../abstract";
 import {DecoCloneLike} from "../clone";
+import {$$coreInternalOn} from "../../internal";
+import {FQN_PCK} from "../internal";
 
-// console.log(__filename);
 
-export class DecoId<V extends Dict = Dict> implements DecoIdLike<V>, DecoIdSecure<V> {
+export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, DecoIdSecure<V, M, P> {
     private readonly _fn: Func;
-    private readonly _instances: Array<DecoInstanceLike>;
-    private readonly _target: Array<Target>;
-    private readonly _forbidden: Array<Forbidden>;
-    private readonly _keywords: Array<string>;
+    private readonly _instances: List<DecoInstanceLike>;
+    private _targets: Array<Target>;
+    private _rules: Array<DecoRule>;
+    private readonly _keywords: Array<string|symbol>;
     private readonly _clones: Array<DecoCloneLike>;
+    private _name: string;
+    private _rulesSet: boolean;
+    private _targetSet: boolean;
+    private _dirty: boolean;
+    private _metadata: M;
+    private _processor: DecoProcessorLambda<any, V, M, P>;
 
-    constructor(fn: Func, target: Array<Target>, forbidden: Array<Forbidden>) {
+    constructor(fn: Func) {
         this._fn = fn;
         this._clones = [];
-        if (!is.array(target)) {
-            target = [];
-        }
-        if (!is.array(forbidden)) {
-            forbidden = [];
-        }
-        if (target.length < 1) {
-            target.push('class', 'method', 'field', 'parameter');
-        }
-        this._target = target;
-        this._forbidden = forbidden;
+        this._targets = ['class', 'method', 'field', 'parameter'];
+        this._rules = [];
         this._keywords = [];
-        this._instances = [];
+        this._instances = new List();
+        this._metadata = {} as M;
+        if (!core.fqnHandler.exists(fn)) {
+            core.fqnHandler.onReady(fn, (name: string) => {
+                this._name = name;
+            });
+        }
+    }
+
+    protected _wrongKeyword(value: any): boolean {
+        switch (typeof value) {
+            case 'symbol':
+                return false; // valid type
+            case "string":
+                return value.trim() === ''; // if empty then wrong value
+            default:
+                return true; // wrong type
+        }
     }
 
     // region getter
@@ -46,23 +56,17 @@ export class DecoId<V extends Dict = Dict> implements DecoIdLike<V>, DecoIdSecur
             name: this.name,
         } as Dict;
         if (detailed) {
-            rec.target = [...this._target];
-            rec.forbidden = [...this._forbidden];
+            rec.targets = [...this._targets];
+            rec.rules = [...this._rules];
         }
         return rec;
     }
 
     get name(): string {
-        return core.fqn.get(this._fn);
-    }
-    get isIdentifier(): boolean {
-        return true;
-    }
-    get asIdentifier(): DecoIdLike {
-        return this;
-    }
-    get asClone(): DecoCloneLike {
-        return null;
+        if (!this._name) {
+            this._name = core.fqnHandler.get(this._fn);
+        }
+        return this._name;
     }
 
     get fn(): Func {
@@ -73,51 +77,241 @@ export class DecoId<V extends Dict = Dict> implements DecoIdLike<V>, DecoIdSecur
         return `<identifier>${this.name}`;
     }
 
-    get forbidden(): Array<Forbidden> {
-        return [...this._forbidden];
-    }
-    get keywords(): Array<string> {
-        return [...this._keywords];
-    }
-    addKeyword(...keywords: Array<string>): number {
-        let count = 0;
-        keywords.forEach(keyword => {
-            if (!this._keywords.includes(keyword)) {
-                this._keywords.push(keyword);
-                count++;
-            }
-        });
-        return count;
-    }
-    hasKeyword(keyword: string): boolean {
-        return this._keywords.includes(keyword);
-    }
-
-    get target(): Array<Target> {
-        return [...this._target];
-    }
-
-    hasTarget(...targets: Array<Target>): boolean {
-        return targets.some(t => this._target.includes(t));
-    }
-
-    isForbidden(forbidden: Forbidden): boolean {
-        return forbidden && this._forbidden.includes(forbidden);
-    }
-
     get instances(): Array<DecoInstanceLike> {
         return this._instances;
     }
 
-    // endregion getter
-
-    // region public
-    fork(...descriptors: Array<unknown>): DecoInstanceLike<V> {
-        return new DecoInstance(this, null, descriptors);
+    get clones(): Array<DecoCloneLike> {
+        return [...this._clones];
     }
 
-    assign(coreReflect: CoreReflectionLike, value: V): void {
-        coreReflect.setValue(this._fn, value);
+    get isIdentifier(): boolean {
+        return true;
+    }
+
+    get asIdentifier(): DecoIdLike<V, M, P> {
+        return this;
+    }
+
+    get asClone(): DecoCloneLike<V, M, P> {
+        throw $dev.developerError({
+            issue: 'identifier.is.not.clone',
+            desc: this.description,
+            where: 'leyyo.decorator.DecoId',
+            method: 'asClone'
+        });
+    }
+
+    fqn(pack: string): this {
+        core.fqnHandler.decorator(this._fn, pack);
+        return this;
+    }
+
+    // endregion getter
+
+    // region target
+    getTargets(): Array<Target> {
+        return [...this._targets];
+    }
+
+    hasTarget(...targets: Array<Target>): boolean {
+        return targets.some(t => this._targets.includes(t));
+    }
+
+    targets(...target: Array<Target>): this {
+        if (this._dirty) {
+            throw $dev.developerError({
+                issue: 'decorator.already.decorated.someone',
+                desc: this.description,
+                where: 'leyyo.decorator.DecoId',
+                method: 'targets'
+            });
+        }
+        if (this._targetSet) {
+            throw $dev.developerError({
+                issue: 'already.target.set',
+                desc: this.description,
+                where: 'leyyo.decorator.DecoId',
+                method: 'targets'
+            });
+        }
+        $assert.literalArray(target, TargetItems, () => $dev.desc(this, {field: 'target'}));
+        this._targets = target;
+        this._targetSet = true;
+        return this;
+    }
+
+    // endregion target
+
+    // region rule
+    getRules(): Array<DecoRule> {
+        return [...this._rules];
+    }
+
+    hasRule(rule: DecoRule): boolean {
+        return rule && this._rules.includes(rule);
+    }
+
+    rules(...rules: Array<DecoRule>): this {
+        if (this._dirty) {
+            throw $dev.developerError({
+                issue: 'decorator.already.decorated.someone',
+                desc: this.description,
+                where: 'leyyo.decorator.DecoId',
+                method: 'rules'
+            });
+        }
+        if (this._rulesSet) {
+            throw $dev.developerError({
+                issue: 'already.rule.set',
+                desc: this.description,
+                where: 'leyyo.decorator.DecoId',
+                method: 'rules'
+            });
+        }
+        $assert.literalArray(rules, DecoRuleItems, () => $dev.desc(this, {field: 'rules'}));
+        this._rules = rules;
+        this._rulesSet = true;
+        return this;
+    }
+
+    // endregion rule
+
+    // region keyword
+    getKeywords(): Array<string|symbol> {
+        return [...this._keywords];
+    }
+
+    keywords(...keyword: Array<string|symbol>): this {
+        const wrong = keyword.filter(value => this._wrongKeyword(value));
+        if (wrong.length > 0) {
+            throw $dev.invalidError({
+                issue: 'invalid.keyword', desc: this.description, field: 'metadata',
+                where: 'leyyo.decorator.DecoId',
+                method: 'keywords', wrong
+            });
+        }
+        keyword.forEach(item => {
+            if (!this._keywords.includes(item)) {
+                this._keywords.push(item);
+            }
+        });
+        return this;
+    }
+
+    hasKeyword(keyword: string): boolean {
+        return this._keywords.includes(keyword);
+    }
+
+    // endregion keyword
+
+    // region metadata
+    getMetadata<M2 = M>(): M2 {
+        return {...this._metadata} as unknown as M2;
+    }
+
+    $setMetadata(metadata: M): this {
+        $assert.bareObject(metadata, () => $dev.desc(this, {
+            field: 'metadata',
+            where: 'leyyo.decorator.DecoId',
+            method: '$setMetadata'
+        }));
+        this._metadata = metadata;
+        return this;
+    }
+
+    metadata(metadata: M): this {
+        if (this._dirty) {
+            throw $dev.developerError({
+                issue: 'decorator.already.decorated.someone',
+                desc: this.description,
+                where: 'leyyo.decorator.DecoId',
+                method: 'metadata'
+            });
+        }
+        return this.$setMetadata(metadata);
+    }
+
+    // endregion metadata
+
+    // region processor
+    processor<R = any>(fn: DecoProcessorLambda<R, V, M, P>): this {
+        if (this._dirty) {
+            throw $dev.developerError({
+                issue: 'decorator.already.decorated.someone',
+                desc: this.description,
+                where: 'leyyo.decorator.DecoId',
+                method: 'processor'
+            });
+        }
+        if (this._processor) {
+            throw $dev.developerError({
+                issue: 'processor.already.defined',
+                where: 'leyyo.decorator.DecoId',
+                method: 'processor'
+            });
+        }
+        return this.$setProcessor(fn);
+    }
+
+    $setProcessor<R = any>(fn: DecoProcessorLambda<R, V, M, P>): this {
+        $assert.func(fn, () => $dev.desc(this, {
+            field: 'processor',
+            where: 'leyyo.decorator.DecoId',
+            method: '$setProcessor'
+        }));
+        this._processor = fn;
+        return this;
+    }
+
+    get hasProcessor(): boolean {
+        return typeof this._processor === 'function';
+    }
+
+    process<R = void>(fork: Array<any> | DecoInstanceLike<V, M, P>, parameters?: P): R {
+        let ins: DecoInstanceLike<V, M, P>;
+        if (Array.isArray(fork)) {
+            ins = this.fork(...fork);
+        } else if (fork instanceof DecoInstance) {
+            ins = fork;
+        } else {
+            throw $dev.invalidError({
+                issue: 'invalid.instance.defined',
+                where: 'leyyo.decorator.DecoId',
+                method: 'process',
+                value: fork,
+                type: typeof fork,
+            });
+        }
+        if (typeof this._processor !== 'function') {
+            throw $dev.invalidError({
+                issue: 'processor.not.defined', field: 'receiver',
+                where: 'leyyo.decorator.DecoId',
+                method: 'process'
+            });
+        }
+        if (!$is.bareObject(parameters)) {
+            parameters = {} as P;
+        }
+        return this._processor(ins, parameters);
+    }
+
+    // endregion processor
+
+    // region dirty
+    get isDirty(): boolean {
+        return this._dirty;
+    }
+
+    dirty(): void {
+        this._dirty = true;
+    }
+
+    // endregion dirty
+
+    // region public
+    fork(...args: Array<unknown>): DecoInstanceLike<V, M, P> {
+        return new DecoInstance<V, M, P>(this, null, args);
     }
 
     // endregion public
@@ -131,19 +325,19 @@ export class DecoId<V extends Dict = Dict> implements DecoIdLike<V>, DecoIdSecur
     }
 
     valueByClass(fn: ClassLike | Func | string, filter?: DecoFilter): V {
-        const reflection = core.reflection.fetchValue(fn);
-        if (!reflection) {
-            return null;
+        const ref = core.reflectionPool.get(fn);
+        if (!ref) {
+            return undefined;
         }
-        return reflection.getValue(this._fn, filter) as V;
+        return ref.getValueByDeco<V>(this._fn, filter);
     }
 
     valuesByClass(fn: ClassLike | Func | string, filter?: DecoFilter): Array<V> {
-        const reflection = core.reflection.fetchValue(fn);
-        if (!reflection) {
+        const ref = core.reflectionPool.get(fn);
+        if (!ref) {
             return [];
         }
-        return reflection.listValues(this._fn, filter) as Array<V>;
+        return ref.listValuesByDeco<V>(this._fn, filter);
     }
 
     // endregion class
@@ -158,21 +352,21 @@ export class DecoId<V extends Dict = Dict> implements DecoIdLike<V>, DecoIdSecur
     }
 
     valueByProperty(fn: Func | string, propName: PropertyKey, filter?: DecoFilter): V {
-        const reflection = core.reflection.fetchValue(fn);
-        if (!reflection) {
-            return null;
+        const ref = core.reflectionPool.get(fn);
+        if (!ref) {
+            return undefined;
         }
-        const prop = reflection.getAnyProperty(propName, filter);
-        return prop?.getValue(this._fn, filter) as V ?? null;
+        const prop = ref.getAnyProperty(propName, filter);
+        return prop?.getValueByDeco<V>(this._fn, filter);
     }
 
     valuesByProperty(fn: Func | string, propName: PropertyKey, filter?: DecoFilter): Array<V> {
-        const reflection = core.reflection.fetchValue(fn);
-        if (!reflection) {
+        const ref = core.reflectionPool.get(fn);
+        if (!ref) {
             return [];
         }
-        const prop = reflection.getAnyProperty(propName, filter);
-        return prop?.listValues(this._fn, filter) as Array<V> ?? [];
+        const prop = ref.getAnyProperty(propName, filter);
+        return prop?.listValuesByDeco<V>(this._fn, filter) ?? [];
     }
 
     // endregion property
@@ -186,49 +380,76 @@ export class DecoId<V extends Dict = Dict> implements DecoIdLike<V>, DecoIdSecur
     }
 
     valueByParameter(fn: Func | string, name: PropertyKey, index: number, filter?: DecoFilter): V {
-        const reflection = core.reflection.fetchValue(fn);
-        if (!reflection) {
-            return null;
+        const ref = core.reflectionPool.get(fn);
+        if (!ref) {
+            return undefined;
         }
         filter = filter ?? {};
         filter.kind = 'method';
-        const prop = reflection.getAnyProperty(name, filter);
+        const prop = ref.getAnyProperty(name, filter);
         if (!prop || !prop.hasParameter(index)) {
-            return null;
+            return undefined;
         }
         const param = prop.getParameter(index);
-        return param.getValue(this._fn) as V;
+        return param?.getValueByDeco<V>(this._fn);
     }
 
     valuesByParameter(fn: Func | string, name: PropertyKey, index: number, filter?: DecoFilter): Array<V> {
-        const reflection = core.reflection.fetchValue(fn);
-        if (!reflection) {
+        const ref = core.reflectionPool.get(fn);
+        if (!ref) {
             return [];
         }
         filter = filter ?? {};
         filter.kind = 'method';
-        const prop = reflection.getAnyProperty(name, filter);
+        const prop = ref.getAnyProperty(name, filter);
         if (!prop || !prop.hasParameter(index)) {
             return [];
         }
         const param = prop.getParameter(index);
-        return param.listValues(this._fn) as Array<V>;
+        return param?.listValuesByDeco<V>(this._fn) ?? [];
     }
 
     // endregion parameter
 
-    get $back(): DecoIdLike<V> {
+    // region secure
+    get $back(): DecoIdLike<V, M, P> {
         return this;
     }
 
 
-    get $secure(): DecoIdSecure<V> {
+    get $secure(): DecoIdSecure<V, M, P> {
         return this;
     }
 
-    get clones(): Array<DecoCloneLike> {
-        return [...this._clones];
+    // endregion secure
+
+    clearInstances(): void {
+        this._instances.forEach(ins => ins.delete());
+        this._instances.clear();
     }
-
-
+    toJSON(simple?: boolean): any {
+        if (simple) {
+            return {
+                name: this._name,
+                fn: this._fn?.name,
+                targets: this._targets,
+                rules: this._rules,
+                keywords: this._keywords.map(key => typeof key === 'symbol' ? `[${key.description}]` : key),
+            };
+        }
+        return {
+            __: DecoId.name,
+            name: this._name,
+            fn: this._fn?.name,
+            targets: this._targets,
+            rules: this._rules,
+            keywords: this._keywords.map(key => typeof key === 'symbol' ? `[${key.description}]` : key),
+            clones: this._clones.map(c => c.toJSON(true)),
+            instances: this._instances.map(c => c.toJSON(true)),
+        };
+    }
 }
+
+$$coreInternalOn('class-instance', () => {
+    core.fqnHandler.clazz(DecoId, FQN_PCK);
+});
