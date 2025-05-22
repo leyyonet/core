@@ -2,9 +2,7 @@ import {ShiftMain, ShiftSecure} from "@leyyo/common";
 import {DecoratorPoolLike} from "../decorator";
 import {ReflectionPoolLike} from "../reflection";
 import {FqnHandlerLike} from "../fqn";
-import {InjectionPoolLike} from "../injection";
 import {FootprintLike} from "../footprint";
-import {RulerPoolLike} from "../ruler";
 import {NamedPoolLike} from "../named";
 import {EnumPoolLike} from "../enum";
 import {ProxyHandlerLike} from "../proxy";
@@ -19,11 +17,7 @@ export interface CoreLike extends ShiftSecure<CoreSecure> {
 
     get fqnHandler(): FqnHandlerLike;
 
-    get injectionPool(): InjectionPoolLike;
-
     get reflectionPool(): ReflectionPoolLike;
-
-    get rulerPool(): RulerPoolLike;
 
     get namedPool(): NamedPoolLike;
 
@@ -44,11 +38,7 @@ export interface CoreSecure extends ShiftMain<CoreLike> {
 
     $setFqnHandler(ins: FqnHandlerLike): CoreSecure;
 
-    $setInjectionPool(ins: InjectionPoolLike): CoreSecure;
-
     $setReflectionPool(ins: ReflectionPoolLike): CoreSecure;
-
-    $setRulerPool(ins: RulerPoolLike): CoreSecure;
 
     $setNamedPool(ins: NamedPoolLike): CoreSecure;
 

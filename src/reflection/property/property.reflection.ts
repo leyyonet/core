@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import {$assert, $descriptor, $dev, $repo, Dict, Func} from "@leyyo/common";
+import {$assert, $descriptor, $dev, $repo, Dict, Func, Obj} from "@leyyo/common";
 import {AbstractReflection} from "../abstract";
 import {ParameterReflection, ParameterReflectionLike} from "../parameter";
 import {
@@ -9,7 +9,15 @@ import {
     PropertyReflectionSecure
 } from "./index.types";
 import {ClassReflectionLike} from "../class";
-import {DecoFilterKeyword, DecoFilterKind, DecoKeyword, DecoKind} from "../../decorator";
+import {
+    DecoArgumentField, DecoArgumentMethod,
+    DecoDoc,
+    DecoFilterKeyword,
+    DecoFilterKind,
+    DecoInstanceLike,
+    DecoKeyword,
+    DecoKind
+} from "../../decorator";
 import {core} from "../../core";
 import {FootprintInspected} from "../../footprint";
 import {$$coreInternalOn} from "../../internal";
@@ -30,7 +38,7 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
     protected _methodCallback: PropertyReflectionMethod;
     // endregion properties
     // region methods
-    constructor(clazz: ClassReflectionLike, name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func) {
+    constructor(clazz: ClassReflectionLike, name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func, clone?: boolean) {
         super(clazz.code, name, keyword, kind);
         this._parameters = $repo.newArray(FQN_PCK, this._code, 'parameters');
         this._clazz = clazz;
@@ -92,9 +100,25 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
             if (this._proto) {
                 const oldDocs = this._proto.docsAll();
                 if (oldDocs.length > 0) {
-                    oldDocs.forEach(doc => {
-                        this.setValue(doc.ins, doc);
-                    });
+                    if (clone) {
+                        oldDocs.forEach(doc => {
+                            const newDeco = {value: doc.value} as DecoDoc;
+                            if (this._kind === 'field') {
+                                const fieldArgs = doc.ins.arguments as DecoArgumentField;
+                                newDeco.ins = doc.ins.copy(this, [fieldArgs[0], this._name]);
+                            }
+                            else {
+                                const methodArgs = doc.ins.arguments as DecoArgumentMethod;
+                                newDeco.ins = doc.ins.copy(this, [methodArgs[0], this._name, methodArgs[2]]);
+                            }
+                            this.setValue(newDeco.ins, newDeco);
+                        });
+                    }
+                    else {
+                        oldDocs.forEach(doc => {
+                            this.setValue(doc.ins, doc);
+                        });
+                    }
                 }
             }
         }

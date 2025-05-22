@@ -1,6 +1,6 @@
-import {ClassLike, Func, Obj} from "@leyyo/common";
+import {ClassLike, Fnc, Func, Obj} from "@leyyo/common";
 import {DecoFilter} from "../../decorator";
-import {ClassReflectionLike} from "../class";
+import {ClassReflectionCopyLambda, ClassReflectionLike} from "../class";
 import {NamedDepotItem, NamedDepotName} from "../../named";
 
 export interface ReflectionPoolLike {
@@ -12,7 +12,7 @@ export interface ReflectionPoolLike {
 
     get(value: NamedDepotName, required?: boolean): ClassReflectionLike;
 
-    registerClass(clazz: ClassLike, prototype?: Obj): ClassReflectionLike;
+    registerClass(clazz: ClassLike, prototype?: Obj, instances?: ClassReflectionCopyLambda, statics?: ClassReflectionCopyLambda): ClassReflectionLike;
 
     classesBy(decorator: string | Func, filter?: DecoFilter): Array<ClassReflectionLike>;
 

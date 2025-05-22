@@ -1,8 +1,8 @@
-import {$descriptor, $dev, $repo, $sys, ClassLike, Dict, Func, Obj} from "@leyyo/common";
+import {$descriptor, $dev, $repo, $sys, ClassLike, Dict, Fnc, Func, Obj} from "@leyyo/common";
 import {AbstractReflection} from "../abstract";
 import {PropertyReflection, PropertyReflectionLike} from "../property";
 import {DecoFilter, DecoFilterKind, DecoKeyword, DecoKind} from "../../decorator";
-import {ClassReflectionLike, ClassReflectionSecure} from "./index.types";
+import {ClassReflectionCopyLambda, ClassReflectionLike, ClassReflectionSecure} from "./index.types";
 import {core} from "../../core";
 import {FootprintInspected} from "../../footprint";
 import {$$coreInternalOn} from "../../internal";
@@ -20,9 +20,10 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
     private readonly _instanceMap: Map<PropertyKey, PropertyReflectionLike>;
     private readonly _staticMap: Map<PropertyKey, PropertyReflectionLike>;
     private readonly _propCache: Map<PropertyKey, Array<PropertyReflectionLike>>;
+    private static _functionProperties = [] as Array<string>;
     // endregion properties
     // region methods
-    constructor(creator: ClassLike, prototype?: Obj) {
+    constructor(creator: ClassLike, prototype?: Obj, instances?: ClassReflectionCopyLambda, statics?: ClassReflectionCopyLambda) {
         super(creator.name);
         this._target = 'class';
         this._instanceMap = $repo.newMap(FQN_PCK, this._code, 'instance');
@@ -50,26 +51,12 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
         }
 
         // region instance-members
-        Object.getOwnPropertyNames(creator.prototype).forEach(key => {
-            const desc = $descriptor.get(creator.prototype, key);
-            if (desc) {
-                let kind: DecoKind;
-                let callable: Func;
-                if (typeof desc.value === 'function') {
-                    kind = 'method';
-                    callable = desc.value;
-                } else {
-                    kind = 'field';
-                    callable = undefined;
-                }
-                this.$registerProperty(key, 'instance', kind, callable);
-            }
-        });
-        // endregion instance-members
-        // region static-members
-        Object.getOwnPropertyNames(creator).forEach(key => {
-            if (!['length', 'name'].includes(key)) {
-                const desc = $descriptor.get(creator, key);
+        if (typeof instances === 'function') {
+            instances(this);
+        }
+        else {
+            Object.getOwnPropertyNames(creator.prototype).forEach(key => {
+                const desc = $descriptor.get(creator.prototype, key);
                 if (desc) {
                     let kind: DecoKind;
                     let callable: Func;
@@ -80,14 +67,49 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
                         kind = 'field';
                         callable = undefined;
                     }
-                    this.$registerProperty(key, 'static', kind, callable);
+                    this.$registerProperty(key, 'instance', kind, callable);
                 }
-            }
-        });
+            });
+        }
+        // endregion instance-members
+
+        // region static-members
+        if (typeof statics === 'function') {
+            statics(this);
+        }
+        else {
+            const ignoredKeys = ClassReflection.functionProperties;
+            Object.getOwnPropertyNames(creator).forEach(key => {
+                if (!ignoredKeys.includes(key)) {
+                    const desc = $descriptor.get(creator, key);
+                    if (desc) {
+                        let kind: DecoKind;
+                        let callable: Func;
+                        if (typeof desc.value === 'function') {
+                            kind = 'method';
+                            callable = desc.value;
+                        } else {
+                            kind = 'field';
+                            callable = undefined;
+                        }
+                        this.$registerProperty(key, 'static', kind, callable);
+                    }
+                }
+            });
+        }
         // endregion static-members
 
     }
 
+    static get functionProperties(): Array<string> {
+        if (ClassReflection._functionProperties.length < 1) {
+            function test() {}
+            Object.getOwnPropertyNames(test).forEach(key => {
+                ClassReflection._functionProperties.push(key);
+            });
+        }
+        return ClassReflection._functionProperties;
+    }
     create<C>(...params: Array<unknown>): C {
         return new this._creator(...params) as C;
     }
@@ -259,17 +281,17 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
         return this;
     }
 
-    $registerProperty(name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func): PropertyReflectionLike {
+    $registerProperty(name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func, clone?: boolean): PropertyReflectionLike {
         switch (keyword) {
             case "instance":
                 if (!this._instanceMap.has(name)) {
-                    const ins = new PropertyReflection(this, name, keyword, kind, callable);
+                    const ins = new PropertyReflection(this, name, keyword, kind, callable, clone);
                     this._instanceMap.set(name, ins);
                 }
                 return this._instanceMap.get(name);
             case "static":
                 if (!this._staticMap.has(name)) {
-                    const ins = new PropertyReflection(this, name, keyword, kind, callable);
+                    const ins = new PropertyReflection(this, name, keyword, kind, callable, clone);
                     this._staticMap.set(name, ins);
                 }
                 return this._staticMap.get(name);

@@ -1,5 +1,5 @@
-import {$descriptor, $dev, $is, $log, ClassLike, Func, Obj} from "@leyyo/common";
-import {ClassReflection, ClassReflectionLike} from "../class";
+import {$descriptor, $dev, $is, $log, ClassLike, Fnc, Func, Obj} from "@leyyo/common";
+import {ClassReflection, ClassReflectionCopyLambda, ClassReflectionLike} from "../class";
 import {ReflectionPoolLike} from "./index.types";
 import {DecoFilter} from "../../decorator";
 import {core} from "../../core";
@@ -39,12 +39,12 @@ export class ReflectionPool implements ReflectionPoolLike {
         return this.getBase(value, required)?.value;
     }
 
-    registerClass(value: ClassLike, prototype?: Obj): ClassReflectionLike {
+    registerClass(value: ClassLike, prototype?: Obj, instances?: ClassReflectionCopyLambda, statics?: ClassReflectionCopyLambda): ClassReflectionLike {
         const base = this.getBase(value, false);
         if (base) {
             return base.value;
         }
-        const ref = new ClassReflection(value, prototype);
+        const ref = new ClassReflection(value, prototype, instances, statics);
         const [, lookup] = this._secure.$add(ref);
         this.logger.debug(`${lookup.basic} is reflected`);
         return ref;

@@ -2,9 +2,7 @@ import {CoreLike, CoreSecure} from "./index.types";
 import {DecoratorPoolLike} from "../decorator";
 import {FootprintLike} from "../footprint";
 import {FqnHandlerLike} from "../fqn";
-import {InjectionPoolLike} from "../injection";
 import {ReflectionPoolLike} from "../reflection";
-import {RulerPoolLike} from "../ruler";
 import {NamedPoolLike} from "../named";
 import {EnumPoolLike} from "../enum";
 import {ProxyHandlerLike} from "../proxy";
@@ -60,20 +58,6 @@ class Core implements CoreLike, CoreSecure {
 
     // endregion fqn
 
-    // region injection
-    private _injectionPool: InjectionPoolLike;
-
-    get injectionPool(): InjectionPoolLike {
-        return this._injectionPool;
-    }
-
-    $setInjectionPool(ins: InjectionPoolLike): CoreSecure {
-        this._injectionPool = ins;
-        return this;
-    }
-
-    // endregion injection
-
     // region reflection-pool
     private _reflectionPool: ReflectionPoolLike;
 
@@ -87,20 +71,6 @@ class Core implements CoreLike, CoreSecure {
     }
 
     // endregion reflection-pool
-
-    // region ruler-pool
-    private _rulerPool: RulerPoolLike;
-
-    get rulerPool(): RulerPoolLike {
-        return this._rulerPool;
-    }
-
-    $setRulerPool(ins: RulerPoolLike): CoreSecure {
-        this._rulerPool = ins;
-        return this;
-    }
-
-    // endregion ruler-pool
 
     // region named-pool
     private _namedPool: NamedPoolLike;

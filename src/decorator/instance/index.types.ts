@@ -12,6 +12,8 @@ import {DecoCloneLike} from "../clone";
 export interface DecoInstanceLike<V = Dict, M = Dict, P = V> {
 
     // region getters
+    copy(assigned: CoreReflectionLike, args: DecoArguments): DecoInstanceLike<V, M, P>;
+    get isCopied(): boolean;
     get description(): string;
 
     get identifier(): DecoIdLike<V, M, P>;

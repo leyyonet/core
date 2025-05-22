@@ -5,12 +5,10 @@ import {$$coreDecoratorInternal} from "../decorator/internal.loader";
 import {$$coreEnumInternal} from "../enum/internal.loader";
 import {$$coreFootprintInternal} from "../footprint/internal.loader";
 import {$$coreFqnInternal} from "../fqn/internal.loader";
-import {$$coreInjectionInternal} from "../injection/internal.loader";
 import {$$coreLifecycleInternal} from "../lifecycle/internal.loader";
 import {$$coreNamedInternal} from "../named/internal.loader";
 import {$$coreProxyInternal} from "../proxy/internal.loader";
 import {$$coreReflectionInternal} from "../reflection/internal.loader";
-import {$$coreRulerInternal} from "../ruler/internal.loader";
 import {$$coreNameInternal} from "../name/internal.loader";
 import {$$coreInternalComplete, $$coreInternalRun} from "./callbacks";
 
@@ -22,12 +20,10 @@ const items: Arr = [
     ...$$coreEnumInternal,
     ...$$coreFootprintInternal,
     ...$$coreFqnInternal,
-    ...$$coreInjectionInternal,
     ...$$coreLifecycleInternal,
     ...$$coreNamedInternal,
     ...$$coreProxyInternal,
     ...$$coreReflectionInternal,
-    ...$$coreRulerInternal,
     ...$$coreNameInternal,
 ];
 $$coreInternalRun('class-pool-1');

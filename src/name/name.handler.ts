@@ -16,6 +16,9 @@ export class NameHandler implements NameHandlerLike {
     set(target: Func | ClassLike, name: string): void {
         $descriptor.save(target, 'name', name);
     }
+    anonymous(type: string, counter: number): string {
+        return `${type}$$${counter}`;
+    }
 }
 
 $$coreInternalOn('class-pool-1', () => {

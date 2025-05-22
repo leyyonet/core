@@ -54,9 +54,10 @@ export interface ClassReflectionLike extends CoreReflectionLike, ShiftSecure<Cla
 }
 
 export interface ClassReflectionSecure extends CoreReflectionLike, ShiftMain<ClassReflectionLike> {
-    $registerProperty(name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func): PropertyReflectionLike;
+    $registerProperty(name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func, clone?: boolean): PropertyReflectionLike;
 
     $clearValues(type: DecoCLearType, ...decorators: Array<Func | DecoLike | string>): this;
 
     $usePrototypeAsBody(): void;
 }
+export type ClassReflectionCopyLambda = (ref: ClassReflectionLike) => void;

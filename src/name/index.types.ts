@@ -13,4 +13,5 @@ export interface NameHandlerLike {
      * Sets function name, especially for arrow functions or proxied class
      * */
     set(target: Func | ClassLike, name: string): void;
+    anonymous(type: string, counter: number): string;
 }
