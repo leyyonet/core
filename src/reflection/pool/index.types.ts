@@ -13,6 +13,7 @@ export interface ReflectionPoolLike {
     get(value: NamedDepotName, required?: boolean): ClassReflectionLike;
 
     registerClass(clazz: ClassLike, prototype?: Obj, instances?: ClassReflectionCopyLambda, statics?: ClassReflectionCopyLambda): ClassReflectionLike;
+    isRegistered(clazz: ClassLike): boolean;
 
     classesBy(decorator: string | Func, filter?: DecoFilter): Array<ClassReflectionLike>;
 

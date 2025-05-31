@@ -49,6 +49,9 @@ export class ReflectionPool implements ReflectionPoolLike {
         this.logger.debug(`${lookup.basic} is reflected`);
         return ref;
     }
+    isRegistered(clazz: ClassLike): boolean {
+        return !!this.getBase(clazz, false);
+    }
 
     classesBy(decorator: string | Func, filter?: DecoFilter): Array<ClassReflectionLike> {
         const id = core.decoratorPool.get(decorator, false);

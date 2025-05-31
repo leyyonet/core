@@ -1,11 +1,11 @@
 import {KeyValue, Obj, ShiftMain, ShiftSecure} from "@leyyo/common";
 import {NamedDepotItem, NamedDepotName} from "../named";
 
-export type EnumObject = Obj | Record<string, KeyValue> | Array<KeyValue>;
+export type EnumValue = Obj | Record<string, KeyValue> | Array<KeyValue>;
 
 export interface EnumPoolLike extends ShiftSecure<EnumPoolSecure> {
 
-    getBase(value: NamedDepotName, required?: boolean): NamedDepotItem<EnumItem, EnumObject>;
+    getBase(value: NamedDepotName, required?: boolean): NamedDepotItem<EnumItem, EnumValue>;
 
     get(value: NamedDepotName, required?: boolean): EnumItem;
 
@@ -19,18 +19,18 @@ export interface EnumPoolLike extends ShiftSecure<EnumPoolSecure> {
 
     addLiteral(name: string, target: unknown): void;
 
-    hasSign(value: EnumObject): boolean;
+    hasSign(value: EnumValue): boolean;
 
-    getSign(value: EnumObject): string;
+    getSign(value: EnumValue): string;
 }
 
 export interface EnumPoolSecure extends ShiftMain<EnumPoolLike> {
-    $add(target: EnumObject): void;
+    $add(target: EnumValue): void;
 }
 
 export interface EnumItem<E extends KeyValue = KeyValue> {
     type: EnumType;
-    pointer: EnumObject;
+    pointer: EnumValue;
     items: Array<E>;
 }
 

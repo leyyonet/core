@@ -1,7 +1,7 @@
 import {Dict, Func, ShiftMain, ShiftSecure} from "@leyyo/common";
 import {CoreReflectionLike} from "../abstract";
 import {PropertyReflectionLike} from "../property";
-import {DecoCLearType, DecoLike} from "../../decorator";
+import {DecoArgumentField, DecoArgumentMethod, DecoArgumentParam, DecoCLearType, DecoLike} from "../../decorator";
 
 export interface ParameterReflectionLike extends CoreReflectionLike, ShiftSecure<ParameterReflectionSecure> {
     // region getters
@@ -16,7 +16,7 @@ export interface ParameterReflectionLike extends CoreReflectionLike, ShiftSecure
     get isVariadic(): boolean;
 
     // endregion getters
-
+    copyDecorators(source: ParameterReflectionLike, args: DecoArgumentParam): void;
 }
 
 export interface ParameterReflectionSecure extends ShiftMain<ParameterReflectionLike> {

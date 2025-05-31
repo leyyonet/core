@@ -1,16 +1,16 @@
-import {ClassLike, Dict, Func, Obj, ShiftMain, ShiftSecure} from "@leyyo/common";
-import {FqnName} from "../fqn";
+import {ClassLike, Dict, Func, List, Obj, ShiftMain, ShiftSecure} from "@leyyo/common";
+import {FqnNaming} from "../fqn";
 
 export type NamedDepotValue = Func | ClassLike | Obj;
 export type NamedDepotName = NamedDepotValue | string;
 
-export interface NamedDepotLookup extends FqnName {
+export interface NamedDepotLookup extends FqnNaming {
     value?: NamedDepotValue;
     any: string;
     found?: boolean;
 }
 
-export interface NamedDepotItem<V extends NamedDepotValue, P extends NamedDepotValue> extends FqnName {
+export interface NamedDepotItem<V extends NamedDepotValue, P extends NamedDepotValue> extends FqnNaming {
     id: number;
     value: V;
     pointers: Array<P | NamedDepotValue>;
@@ -80,13 +80,14 @@ export interface NamedDepotSecure<V extends NamedDepotValue, P extends NamedDepo
     readonly $proxyInheritedBy: symbol;
     readonly $pointerFinderLambda: NamedDepotFinderLambda<V, P>;
     readonly $isLambda: NamedDepotEqualsLambda<V>;
-    readonly $bases: Array<NamedDepotItem<V, P>>;
+    readonly $bases: List<NamedDepotItem<V, P>>;
     readonly $aliases: Map<string, NamedDepotAliasItem<V, P>>;
 
     $toName(value: NamedDepotValue): string;
 
     $func(value: V, throwable?: boolean): V;
 
+    $clearAll(): void;
     $clearAliases(base: NamedDepotItem<V, P>, nameType?: NamedDepotNameType): void;
 
     $appendAliases(base: NamedDepotItem<V, P>): void;

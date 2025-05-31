@@ -1,5 +1,6 @@
 import {Dict, Func, ShiftMain, ShiftSecure} from "@leyyo/common";
 import {
+    DecoArgumentClass, DecoArgumentField, DecoArgumentMethod,
     DecoCLearType,
     DecoFilterBelongs,
     DecoFilterKeyword,
@@ -110,27 +111,14 @@ export interface PropertyReflectionLike extends CoreReflectionLike, ShiftSecure<
     filterByBelongs(decorator: Func | string, filter?: DecoFilterBelongs): boolean;
 
     // endregion filter-by
+
+    copyDecorators(source: PropertyReflectionLike, args: DecoArgumentField | DecoArgumentMethod): void;
 }
 
 export interface PropertyReflectionSecure extends ShiftMain<PropertyReflectionLike> {
-    $setFieldType(type: Func): this;
+    $setType(type: Func): this;
 
-    $setMethodCallable(callable: Func): this;
+    $setCallable(callable: Func): this;
 
     $clearValues(type: DecoCLearType, ...decorators: Array<Func | DecoLike | string>): this;
-
-    get $methodCallback(): PropertyReflectionMethod;
-
-    $setMethodCallback(fn: PropertyReflectionMethodCallback): this;
-}
-
-export type PropertyReflectionMethodCallback =
-    PropertyReflectionMethodCallbackAsync
-    | PropertyReflectionMethodCallbackSync;
-export type PropertyReflectionMethodCallbackSync = (ins: DecoInstanceLike, ...args: Array<any>) => Array<any>;
-export type PropertyReflectionMethodCallbackAsync = (ins: DecoInstanceLike, ...args: Array<any>) => Promise<Array<any>>;
-
-export interface PropertyReflectionMethod {
-    isAsync?: true;
-    fn: PropertyReflectionMethodCallbackAsync | PropertyReflectionMethodCallbackSync;
 }

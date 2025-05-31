@@ -1,37 +1,35 @@
-import {$assert, $dev, $is, ClassLike, Dict, Func, List} from "@leyyo/common";
+import {$assert, $dev, $is, ClassLike, Dict, Func} from "@leyyo/common";
 import {DecoIdLike, DecoIdSecure, DecoProcessorLambda} from "./index.types";
 import {DecoInstance, DecoInstanceLike} from "../instance";
 import {ClassReflectionLike, ParameterReflectionLike, PropertyReflectionLike} from "../../reflection";
 import {DecoRule, DecoRuleItems, Target, TargetItems} from "../literals";
 import {core} from "../../core";
-import {DecoFilter} from "../abstract";
-import {DecoCloneLike} from "../clone";
+import {DecoFilter, DecoLike} from "../abstract";
+import {DecoClone, DecoCloneLike} from "../clone";
 import {$$coreInternalOn} from "../../internal";
 import {FQN_PCK} from "../internal";
 
-
 export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, DecoIdSecure<V, M, P> {
     private readonly _fn: Func;
-    private readonly _instances: List<DecoInstanceLike>;
     private _targets: Array<Target>;
     private _rules: Array<DecoRule>;
-    private readonly _keywords: Array<string|symbol>;
-    private readonly _clones: Array<DecoCloneLike>;
     private _name: string;
     private _rulesSet: boolean;
     private _targetSet: boolean;
     private _dirty: boolean;
     private _metadata: M;
+
+    private _instances: Array<DecoInstanceLike>;
+    private _keywords: Array<string|symbol>;
+    private _clones: Array<DecoCloneLike<V, M, P>>;
+    private _before: Array<DecoIdLike>;
+    private _after: Array<DecoIdLike>;
     private _processor: DecoProcessorLambda<any, V, M, P>;
 
     constructor(fn: Func) {
         this._fn = fn;
-        this._clones = [];
         this._targets = ['class', 'method', 'field', 'parameter'];
         this._rules = [];
-        this._keywords = [];
-        this._instances = new List();
-        this._metadata = {} as M;
         if (!core.fqnHandler.exists(fn)) {
             core.fqnHandler.onReady(fn, (name: string) => {
                 this._name = name;
@@ -78,11 +76,17 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
     }
 
     get instances(): Array<DecoInstanceLike> {
-        return this._instances;
+        return this._instances ? this._instances : [];
     }
 
-    get clones(): Array<DecoCloneLike> {
-        return [...this._clones];
+    get clones(): Array<DecoCloneLike<V, M, P>> {
+        return this._clones ? [...this._clones] : [];
+    }
+    addClone(clone: DecoCloneLike<V, M, P>): void {
+        if (!this._clones) {
+            this._clones = [];
+        }
+        this._clones.push(clone);
     }
 
     get isIdentifier(): boolean {
@@ -179,7 +183,7 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
 
     // region keyword
     getKeywords(): Array<string|symbol> {
-        return [...this._keywords];
+        return this._keywords ? [...this._keywords] : [];
     }
 
     keywords(...keyword: Array<string|symbol>): this {
@@ -191,23 +195,29 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
                 method: 'keywords', wrong
             });
         }
-        keyword.forEach(item => {
-            if (!this._keywords.includes(item)) {
-                this._keywords.push(item);
+        if (keyword.length > 0) {
+            if (!this._keywords) {
+                this._keywords = [];
             }
-        });
+            keyword.forEach(item => {
+                if (!this._keywords.includes(item)) {
+                    this._keywords.push(item);
+                }
+            });
+
+        }
         return this;
     }
 
     hasKeyword(keyword: string): boolean {
-        return this._keywords.includes(keyword);
+        return this._keywords ? this._keywords.includes(keyword) : false;
     }
 
     // endregion keyword
 
     // region metadata
     getMetadata<M2 = M>(): M2 {
-        return {...this._metadata} as unknown as M2;
+        return this._metadata ? {...this._metadata} as unknown as M2 : {} as M2;
     }
 
     $setMetadata(metadata: M): this {
@@ -231,10 +241,46 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
         }
         return this.$setMetadata(metadata);
     }
+    deleteMetaKey(key: keyof M): this {
+        if (!$is.text(key) && typeof key !== 'symbol') {
+            return this;
+        }
+        if (!this._metadata) {
+            return this;
+        }
+        if (this._metadata[key] !== undefined) {
+            delete this._metadata[key];
+        }
+        return this;
+    }
+    setMetaKey(key: keyof M, value: M[keyof M]): this {
+        if (!$is.text(key) && typeof key !== 'symbol') {
+            return this;
+        }
+        if (this._dirty) {
+            throw $dev.developerError({
+                issue: 'decorator.already.decorated.someone',
+                desc: this.description,
+                where: 'leyyo.decorator.DecoId',
+                method: 'metadata'
+            });
+        }
+        if (!this._metadata) {
+            this._metadata = {} as M;
+        }
+        this._metadata[key] = value;
+        return this;
+    }
 
     // endregion metadata
 
     // region processor
+    addInstance(ins: DecoInstanceLike): void {
+        if (!this._instances) {
+            this._instances = [];
+        }
+        this._instances.push(ins);
+    }
     processor<R = any>(fn: DecoProcessorLambda<R, V, M, P>): this {
         if (this._dirty) {
             throw $dev.developerError({
@@ -316,12 +362,75 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
 
     // endregion public
 
+    protected _afterAdd(deco: DecoLike, next: boolean): void {
+        const id = deco.isIdentifier ? deco as DecoIdLike : deco.asIdentifier;
+        if (id !== this) {
+            return;
+        }
+        if (!this._after) {
+            this._after = [];
+        }
+        if (this._after.includes(id)) {
+            return;
+        }
+        this._after.push(id);
+        if (next) {
+            this._beforeAdd(deco, false);
+        }
+    }
+
+    protected _beforeAdd(deco: DecoLike, next: boolean): void {
+        const id = deco.isIdentifier ? deco as DecoIdLike : deco.asIdentifier;
+        if (id !== this) {
+            return;
+        }
+        if (!this._before) {
+            this._before = [];
+        }
+        if (this._before.includes(id)) {
+            return;
+        }
+        this._before.push(id);
+        if (next) {
+            this._afterAdd(deco, false);
+        }
+    }
+
+    private _findId(given: Func | string | DecoLike): DecoIdLike {
+        if (given instanceof DecoId) {
+            return given;
+        } else if (given instanceof DecoClone) {
+            return given.id;
+        }
+        const found = core.decoratorPool.get(given as DecoLike, true);
+        if (found instanceof DecoId) {
+            return found;
+        }
+        return (found as DecoCloneLike).id;
+    }
+
+    isAfter(deco: DecoLike | Func | string): boolean {
+        return this._after ? this._after.includes(this._findId(deco)) : false;
+    }
+
+    isBefore(deco: DecoLike | Func | string): boolean {
+        return this._before ? this._before.includes(this._findId(deco)) : false;
+    }
+
+    before(...functions: Array<Func|string>): this {
+        functions.forEach(fn => this._beforeAdd(this._findId(fn), true));
+        return this;
+    }
+    after(...functions: Array<Func|string>): this {
+        functions.forEach(fn => this._afterAdd(this._findId(fn), true));
+        return this;
+    }
 
     // region class
     assignedClasses(filter?: DecoFilter): Array<ClassReflectionLike> {
-        return this._instances.map(ins => ins.assigned as ClassReflectionLike)
+        return this._instances ? this._instances.map(ins => ins.assigned as ClassReflectionLike)
             .filter(item => item.filterByTarget('class'))
-            .filter(item => item.filterByBelongs(this._fn, filter));
+            .filter(item => item.filterByBelongs(this._fn, filter)) : [];
     }
 
     valueByClass(fn: ClassLike | Func | string, filter?: DecoFilter): V {
@@ -343,11 +452,11 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
     // endregion class
     // region property
     assignedProperties(filter?: DecoFilter): Array<PropertyReflectionLike> {
-        return this._instances
+        return this._instances ? this._instances
             .map(ins => ins.assigned as PropertyReflectionLike)
             .filter(item => item.filterByTarget('method', 'field'))
             .filter(item => item.filterByKind(filter))
-            .filter(item => item.filterByBelongs(this._fn, filter))
+            .filter(item => item.filterByBelongs(this._fn, filter)) : []
             ;
     }
 
@@ -372,10 +481,10 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
     // endregion property
     // region parameter
     assignedParameters(filter?: DecoFilter): Array<ParameterReflectionLike> {
-        return this._instances
+        return this._instances ? this._instances
             .map(ins => ins.assigned as ParameterReflectionLike)
             .filter(item => item.filterByTarget('parameter'))
-            .filter(item => item.filterByBelongs(this._fn, filter))
+            .filter(item => item.filterByBelongs(this._fn, filter)) : []
             ;
     }
 
@@ -424,8 +533,10 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
     // endregion secure
 
     clearInstances(): void {
-        this._instances.forEach(ins => ins.delete());
-        this._instances.clear();
+        if (this._instances) {
+            this._instances.forEach(ins => ins.delete());
+            delete this._instances;
+        }
     }
     toJSON(simple?: boolean): any {
         if (simple) {
@@ -434,7 +545,7 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
                 fn: this._fn?.name,
                 targets: this._targets,
                 rules: this._rules,
-                keywords: this._keywords.map(key => typeof key === 'symbol' ? `[${key.description}]` : key),
+                keywords: this._keywords ? this._keywords.map(key => typeof key === 'symbol' ? `[${key.description}]` : key) : [],
             };
         }
         return {
@@ -443,9 +554,9 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
             fn: this._fn?.name,
             targets: this._targets,
             rules: this._rules,
-            keywords: this._keywords.map(key => typeof key === 'symbol' ? `[${key.description}]` : key),
-            clones: this._clones.map(c => c.toJSON(true)),
-            instances: this._instances.map(c => c.toJSON(true)),
+            keywords: this._keywords ? this._keywords.map(key => typeof key === 'symbol' ? `[${key.description}]` : key) : [],
+            clones: this._clones ? this._clones.map(c => c.toJSON(true)) : [],
+            instances: this._instances ? this._instances.map(c => c.toJSON(true)) : [],
         };
     }
 }

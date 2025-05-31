@@ -1,4 +1,4 @@
-import {$descriptor, $dev, $is, $log, $repo, Logger} from "@leyyo/common";
+import {$descriptor, $dev, $is, $log, $repo, List, Logger} from "@leyyo/common";
 import {
     NamedDepotAliasItem,
     NamedDepotEqualsLambda,
@@ -28,7 +28,7 @@ export class NamedDepot<V extends NamedDepotValue, P extends NamedDepotValue> im
     readonly $proxyInheritedBy: symbol;
     readonly $pointerFinderLambda: NamedDepotFinderLambda<V, P>;
     readonly $isLambda: NamedDepotEqualsLambda<V>;
-    readonly $bases: Array<NamedDepotItem<V, P>>;
+    readonly $bases: List<NamedDepotItem<V, P>>;
     readonly $aliases: Map<string, NamedDepotAliasItem<V, P>>;
     readonly logger: Logger;
     // endregion properties
@@ -40,9 +40,9 @@ export class NamedDepot<V extends NamedDepotValue, P extends NamedDepotValue> im
     constructor(doc: NamedPoolNewDoc<V, P>) {
         this.bucket = doc.bucket;
         this.$pointerFinderLambda = doc.pointerFinderLambda;
-        this.$isLambda = typeof doc.equalsLambda === 'function' ? doc.equalsLambda : () => true;
+        this.$isLambda = typeof doc.equalsLambda === 'function' ? doc.equalsLambda : _v => true;
         this.logger = $log.create(this.constructor);
-        this.$bases = $repo.newArray(doc.pack, doc.name, 'base');
+        this.$bases = $repo.newList(doc.pack, doc.name, 'base');
         this.$aliases = $repo.newMap(doc.pack, doc.name, 'aliases');
         this.$proxyInherits = $descriptor.sym(doc.pack, doc.name, 'inherits');
         this.$proxyInheritedBy = $descriptor.sym(doc.pack, doc.name, 'inheritedBy');
@@ -53,7 +53,7 @@ export class NamedDepot<V extends NamedDepotValue, P extends NamedDepotValue> im
     // region getter
 
     get bases(): Array<NamedDepotItem<V, P>> {
-        return this.$bases;
+        return [...this.$bases];
     }
 
     get info(): Array<NamedDepotInfo> {
@@ -281,6 +281,10 @@ export class NamedDepot<V extends NamedDepotValue, P extends NamedDepotValue> im
         return value;
     }
 
+    $clearAll(): void {
+        this.$bases.clear();
+        this.$aliases.clear();
+    }
     $clearAliases(base: NamedDepotItem<V, P>, nameType?: NamedDepotNameType): void {
         if (nameType) {
             for (const [alias, otherBase] of this.$aliases.entries()) {
@@ -329,14 +333,14 @@ export class NamedDepot<V extends NamedDepotValue, P extends NamedDepotValue> im
     }
 
     $findByName(name: string): NamedDepotItem<V, P> {
-        const naming = core.fqnHandler.toFullName(name);
+        const naming = core.fqnHandler.toNaming(name);
         if (!naming.basic) {
             return undefined;
         }
         if (this.$aliases.has(naming.full)) {
             return this.$aliases.get(naming.full);
         }
-        if (this.$aliases.has(naming.basic)) {
+        if (naming.basic !== naming.full && this.$aliases.has(naming.basic)) {
             return this.$aliases.get(naming.basic);
         }
         return undefined;
@@ -362,8 +366,8 @@ export class NamedDepot<V extends NamedDepotValue, P extends NamedDepotValue> im
             case "string":
             case "function":
             case "object":
-                const naming = core.fqnHandler.toFullName(this.$toName(value));
-                return {value, ...naming, any: naming.full ?? naming.basic};
+                const naming = core.fqnHandler.toNaming(this.$toName(value));
+                return {value, ...naming, any: naming.full};
             default:
                 return undefined;
         }

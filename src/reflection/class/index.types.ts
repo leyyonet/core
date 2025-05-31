@@ -1,6 +1,15 @@
 import {ClassLike, Dict, Func, Obj, ShiftMain, ShiftSecure} from "@leyyo/common";
 import {CoreReflectionLike} from "../abstract";
-import {DecoCLearType, DecoFilter, DecoFilterKind, DecoKeyword, DecoKind, DecoLike} from "../../decorator";
+import {
+    DecoArgumentClass,
+    DecoArguments,
+    DecoCLearType,
+    DecoFilter,
+    DecoFilterKind,
+    DecoKeyword,
+    DecoKind,
+    DecoLike
+} from "../../decorator";
 import {PropertyReflectionLike} from "../property";
 import {FootprintInspected} from "../../footprint";
 
@@ -51,13 +60,13 @@ export interface ClassReflectionLike extends CoreReflectionLike, ShiftSecure<Cla
     hasAnyProperty(name: PropertyKey, filter?: DecoFilter): boolean;
 
     // endregion any-properties
+
+    copyDecorators(source: ClassReflectionLike, args: DecoArgumentClass): void;
 }
 
 export interface ClassReflectionSecure extends CoreReflectionLike, ShiftMain<ClassReflectionLike> {
     $registerProperty(name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func, clone?: boolean): PropertyReflectionLike;
 
     $clearValues(type: DecoCLearType, ...decorators: Array<Func | DecoLike | string>): this;
-
-    $usePrototypeAsBody(): void;
 }
 export type ClassReflectionCopyLambda = (ref: ClassReflectionLike) => void;

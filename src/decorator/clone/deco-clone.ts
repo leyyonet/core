@@ -2,7 +2,7 @@ import {$assert, $dev, ClassLike, Dict, Func} from "@leyyo/common";
 import {DecoClonedDetail, DecoCloneLike} from "./index.types";
 import {DecoIdLike} from "../identifier";
 import {ClassReflectionLike, ParameterReflectionLike, PropertyReflectionLike} from "../../reflection";
-import {DecoFilter} from "../abstract";
+import {DecoFilter, DecoLike} from "../abstract";
 import {DecoRule, Target, TargetItems} from "../literals";
 import {DecoInstance, DecoInstanceLike} from "../instance";
 import {core} from "../../core";
@@ -27,6 +27,7 @@ export class DecoClone<V = Dict, M = Dict, P = V> implements DecoCloneLike<V, M,
                 this._name = name;
             });
         }
+        id.addClone(this);
     }
 
     // noinspection JSUnusedLocalSymbols
@@ -172,6 +173,23 @@ export class DecoClone<V = Dict, M = Dict, P = V> implements DecoCloneLike<V, M,
     }
 
     // endregion processor
+
+    isAfter(deco: DecoLike | Func | string): boolean {
+        return this._id.isAfter(deco as string);
+    }
+
+    isBefore(deco: DecoLike | Func | string): boolean {
+        return this._id.isBefore(deco as string);
+    }
+
+    before(...functions: Array<Func|string>): this {
+        this._id.before(...functions);
+        return this;
+    }
+    after(...functions: Array<Func|string>): this {
+        this._id.after(...functions);
+        return this;
+    }
 
     assignedClasses(filter?: DecoFilter): Array<ClassReflectionLike> {
         return this._id.assignedClasses(filter);

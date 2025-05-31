@@ -1,32 +1,29 @@
-import {$assert, $dev, $log, $repo, $test, AsyncFnc, DevOpt, Func, List} from "@leyyo/common";
+import {$assert, $dev, $log, $repo, AsyncFnc, Func} from "@leyyo/common";
 import {
+    LifecycleAllItem,
     LifecycleBuilder,
     LifecycleItem,
-    LifecycleKillLambda, LifecycleKillType,
+    LifecycleKillLambda,
+    LifecycleKillType,
     LifecycleLike,
     LifecycleManageItem,
     LifecycleManageLambda,
-    LifecycleSecure, LifecycleStage
+    LifecycleStage
 } from "./index.types";
 import {$$coreInternalOn} from "../internal";
 import {core} from "../core";
 import {FQN_PCK} from "./internal";
 
-export class Lifecycle implements LifecycleLike, LifecycleSecure {
+export class Lifecycle implements LifecycleLike {
     private readonly logger = $log.create(Lifecycle);
-    readonly infoMessages: List<DevOpt>;
-    readonly redundantMessages: List<DevOpt>;
-    readonly warningMessages: List<DevOpt>;
 
     protected readonly items: Map<LifecycleStage, Array<LifecycleItem>>;
+    protected readonly allItems: Map<string, LifecycleAllItem>;
     protected readonly sorted: Array<LifecycleStage>;
 
     constructor() {
-        this.infoMessages = $repo.newList(FQN_PCK, 'infoMessages');
-        this.redundantMessages = $repo.newList(FQN_PCK, 'redundantMessages');
-        this.warningMessages = $repo.newList(FQN_PCK, 'warningMessages');
-
         this.items = $repo.newMap(FQN_PCK, 'items');
+        this.allItems = $repo.newMap(FQN_PCK, 'allItems');
         this.sorted = $repo.newArray(FQN_PCK, 'sorted');
         this.items.set('initialize', []);
         this.items.set('validate', []);
@@ -35,15 +32,7 @@ export class Lifecycle implements LifecycleLike, LifecycleSecure {
         this.items.set('manage', []);
         this.items.set('kill', []);
     }
-    get $back(): LifecycleLike {
-        return this;
-    }
 
-    get $secure(): LifecycleSecure {
-        return this;
-    }
-
-    // region stage
     private _sortItems(stage: LifecycleStage): boolean {
         if (!this.items.has(stage)) {
             return false;
@@ -68,29 +57,55 @@ export class Lifecycle implements LifecycleLike, LifecycleSecure {
         this.sorted.push(stage);
         return true;
     }
+
     private _clearItems(stage: LifecycleStage): void {
         if (!this.items.has(stage)) {
             return;
         }
         this.items.set(stage, []);
     }
-    private _checkName(stage: LifecycleStage, name: string): void {
-        $assert.text(name, () => $dev.opt({issue: 'Lifecycle item name is invalid', value: name, stage}));
-        if (!this.items.has(stage)) {
-            throw $dev.developerError2(FQN_PCK, 100, {message: 'Invalid Lifecycle stage', stage, name});
+
+    private _checkText(stage: LifecycleStage, pck: string, field: string): void {
+        $assert.text(pck, () => $dev.opt({issue: `Lifecycle item ${field} is invalid`, value: pck, field, stage}));
+    }
+    private _checkDuplicated(stage: LifecycleStage, pck: string): void {
+        if (this.items.get(stage).filter(item => item.name === pck).length > 0) {
+            throw $dev.developerError2(FQN_PCK, 100, {message: 'Lifecycle item is duplicated', stage, pck});
         }
-        if (this.items.get(stage).filter(item => item.name === name).length > 0) {
-            throw $dev.developerError2(FQN_PCK, 100, {message: 'Lifecycle item is duplicated', stage, name});
+    }
+
+    private _checkStage(stage: LifecycleStage, pck: string): void {
+        if (!stage || !this.items.has(stage)) {
+            throw $dev.developerError2(FQN_PCK, 100, {message: 'Invalid lifecycle stage', stage, pck});
         }
     }
     private _checkLambda(stage: LifecycleStage, name: string, fn: Func): void {
         $assert.func(fn, () => $dev.opt({issue: 'Lifecycle item lambda is invalid', name, stage}));
     }
-    private _addItem(stage: LifecycleStage, name: string, fn: Func): LifecycleBuilder {
-        this._checkName(stage, name);
-        this._checkLambda(stage, name, fn);
+
+    private _addItem(stage: LifecycleStage, pck: string, v1:Func|string, v2: Func): LifecycleBuilder {
+        this._checkStage(stage, pck);
+        this._checkText(stage, pck, 'package');
+        this._checkDuplicated(stage, pck);
+        let name: string;
+        let fn: Func;
+        if (typeof v1 === 'function') {
+            name = pck;
+            fn = v1;
+        }
+        else {
+            this._checkText(stage, v1, 'extension');
+            name = `${pck}#${v1}`;
+            this._checkLambda(stage, name, v2);
+            fn = v2;
+        }
         const isAsync = core.footprint.isAsync(fn);
         const item = {name, fn, isAsync, before: [], after: []};
+        if (this.allItems.has(pck)) {
+            const all = this.allItems.get(pck);
+            item.before.push(...all.before);
+            item.after.push(...all.after);
+        }
         this.items.get(stage).push(item);
         const result = {
             before: (n: string) => {
@@ -111,6 +126,7 @@ export class Lifecycle implements LifecycleLike, LifecycleSecure {
         } as LifecycleBuilder;
         return result;
     }
+
     private async _runItems(stage: LifecycleStage, raise: boolean, ...args: Array<any>): Promise<void> {
         if (!this._sortItems(stage)) {
             return;
@@ -119,12 +135,10 @@ export class Lifecycle implements LifecycleLike, LifecycleSecure {
             try {
                 if (item.isAsync) {
                     await (item.fn as AsyncFnc)(...args);
-                }
-                else {
+                } else {
                     (item.fn as Func)(...args);
                 }
-            }
-            catch (e) {
+            } catch (e) {
                 if (raise) {
                     throw $dev.developerError2(FQN_PCK, 100, {message: e.message, error: e, name: item.name});
                 }
@@ -132,104 +146,90 @@ export class Lifecycle implements LifecycleLike, LifecycleSecure {
             }
         }
     }
-    onInitialize(name: string, fn: Func): LifecycleBuilder {
-        return this._addItem('initialize', name, fn);
+
+    onInitialize(pck: string, ext: Func|string, fn?: Func): LifecycleBuilder {
+        return this._addItem('initialize', pck, ext, fn);
     }
+
     async initialize(): Promise<void> {
         await this._runItems('initialize', true);
         this._clearItems('initialize');
     }
 
-    onValidate(name: string, fn: Func): LifecycleBuilder {
-        return this._addItem('validate', name, fn);
+    onValidate(pck: string, ext: Func|string, fn?: Func): LifecycleBuilder {
+        return this._addItem('validate', pck, ext, fn);
     }
+
     async validate(): Promise<void> {
         await this._runItems('validate', true);
         this._clearItems('validate');
     }
 
-    onProcess(name: string, fn: Func): LifecycleBuilder {
-        return this._addItem('process', name, fn);
+    onProcess(pck: string, ext: Func|string, fn?: Func): LifecycleBuilder {
+        return this._addItem('process', pck, ext, fn);
     }
+
     async process(): Promise<void> {
         await this._runItems('process', true);
         this._clearItems('process');
     }
 
-    onClear(name: string, fn: Func): LifecycleBuilder {
-        return this._addItem('clear', name, fn);
+    onClear(pck: string, ext: Func|string, fn?: Func): LifecycleBuilder {
+        return this._addItem('clear', pck, ext, fn);
     }
+
     async clear(): Promise<void> {
         await this._runItems('clear', false);
         this._clearItems('clear');
     }
 
-    onManage(name: string, fn: LifecycleManageLambda): LifecycleBuilder {
-        return this._addItem('manage', name, fn);
+    onManage(pck: string, ext: LifecycleManageLambda|string, fn?: LifecycleManageLambda): LifecycleBuilder {
+        return this._addItem('manage', pck, ext, fn);
     }
+
     async manage(item: LifecycleManageItem): Promise<void> {
         await this._runItems('manage', false, item);
         // dont clear
     }
 
-    onKill(name: string, fn: LifecycleKillLambda): LifecycleBuilder {
-        return this._addItem('kill', name, fn);
+    onKill(pck: string, ext: LifecycleKillLambda|string, fn?: LifecycleKillLambda): LifecycleBuilder {
+        return this._addItem('kill', pck, ext, fn);
     }
+
     async kill(type: LifecycleKillType): Promise<void> {
         await this._runItems('kill', false, type);
         this._clearItems('kill');
     }
-    // endregion stage
 
-    // region log
-    protected _hasLog(list: List<DevOpt>, pck: string, testCase: number|string): boolean {
-        const code = $test.code(pck, testCase);
-        return list.filter(d => d.case === code).length > 0;
-    }
-    protected _addLog(list: List<DevOpt>, pck: string, testCase: number|string, opt: DevOpt): void {
-        list.push({case: $test.code(pck, testCase), ...opt});
-    }
-    protected _getLog(list: List<DevOpt>, pck: string): Array<DevOpt> {
-        const lines = list.filter(d => d.case === $test.code(pck, ''));
-        this.redundantMessages.forEach(opt => list.delete(opt));
-        return lines;
-    }
+    onAll(pck: string): LifecycleBuilder {
+        $assert.text(pck, () => $dev.opt({issue: `Lifecycle item package is invalid`, value: pck, field: 'package'}));
+        if (this.allItems.has(pck)) {
+            throw $dev.developerError2(FQN_PCK, 100, {message: 'Lifecycle all item is duplicated', pck});
+        }
+        const item = {
+            before: [],
+            after: [],
+        } as LifecycleAllItem;
+        this.allItems.set(pck, item);
 
-    clearMessages(): void {
-        this.infoMessages.clear();
-        this.warningMessages.clear();
-        this.redundantMessages.clear();
+        const result = {
+            before: (n: string) => {
+                $assert.text(n, () => $dev.opt({issue: 'Before name is invalid', pck, dir: 'before'}));
+                if (!item.before.includes(n)) {
+                    item.before.push(n);
+                }
+                return result;
+            },
+            after: (n: string) => {
+                $assert.text(n, () => $dev.opt({issue: 'After name is invalid', pck, dir: 'after'}));
+                if (!item.after.includes(n)) {
+                    item.after.push(n);
+                }
+                return result;
+            }
+        } as LifecycleBuilder;
+        return result;
     }
-    hasInfo(pck: string, testCase: number|string): boolean {
-        return this._hasLog(this.infoMessages, pck, testCase);
-    }
-    hasWarning(pck: string, testCase: number|string): boolean {
-        return this._hasLog(this.warningMessages, pck, testCase);
-    }
-    hasRedundant(pck: string, testCase: number|string): boolean {
-        return this._hasLog(this.redundantMessages, pck, testCase);
-    }
-    addInfo(pck: string, testCase: number|string, opt: DevOpt): void {
-        this._addLog(this.infoMessages, pck, testCase, opt);
-    }
-    addWarning(pck: string, testCase: number|string, opt: DevOpt): void {
-        this._addLog(this.warningMessages, pck, testCase, opt);
-    }
-    addRedundant(pck: string, testCase: number|string, opt: DevOpt): void {
-        this._addLog(this.redundantMessages, pck, testCase, opt);
-    }
-    getInfo(pck: string): Array<DevOpt> {
-        return this._getLog(this.infoMessages, pck);
-    }
-    getWarning(pck: string): Array<DevOpt> {
-        return this._getLog(this.warningMessages, pck);
-    }
-    getRedundant(pck: string): Array<DevOpt> {
-        return this._getLog(this.redundantMessages, pck);
-    }
-
-    // endregion log
-
 }
 
 $$coreInternalOn('class-pool-1', () => {

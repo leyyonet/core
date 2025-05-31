@@ -45,7 +45,7 @@ export class DecoInstance<V = Dict, M = Dict, P = V> implements DecoInstanceLike
             // let isSetter: boolean;
             this._identifier = identifier;
             this._clone = clone;
-            identifier.instances.push(this);
+            identifier.addInstance(this as DecoInstanceLike);
             const targetObj = args[0] as Obj | Func;
             const type = typeof targetObj;
             if (type === 'function') {
@@ -271,11 +271,11 @@ export class DecoInstance<V = Dict, M = Dict, P = V> implements DecoInstanceLike
     }
 
     set(value?: V): CoreReflectionLike {
-        this._assigned.setValue(this, value);
+        this._assigned.setValue(this as DecoInstanceLike, value);
         return this._assigned;
     }
     delete(): void {
-        this._assigned.clearValue(this);
+        this._assigned.clearValue(this as DecoInstanceLike);
     }
 
     getValue<V2 = V>(): V2 {

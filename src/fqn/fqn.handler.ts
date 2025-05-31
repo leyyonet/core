@@ -17,12 +17,12 @@ import {
     LeyyoCommonHook,
     Obj
 } from "@leyyo/common";
-import {FqnDetail, FqnGroupType, FqnHandlerLike, FqnHandlerSecure, FqnName, FqnPath} from "./index.types";
+import {FqnDetail, FqnGroupType, FqnHandlerLike, FqnHandlerSecure, FqnNaming} from "./index.types";
 import {FootprintInspected, FootprintKeyword} from "../footprint";
 import {core} from "../core";
 import {FQN_PCK} from "./internal";
 import {$$coreInternalOn} from "../internal";
-import {FqnNameSign, FqnPackageSign} from "./index.symbols";
+import {FqnAllSign} from "./index.symbols";
 
 
 export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
@@ -57,7 +57,7 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
                 this.enumeration(name, target, pckName);
                 break;
             default:
-                this.logger.warn$({name, type, issue: 'unknown.target.type'});
+                this.logger.deploy.$warning(FQN_PCK, 100, {name, type, message: 'Unknown target type'})
                 break;
         }
     }
@@ -89,7 +89,7 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
     private _func(target: Func, path: string, inside: boolean, isDeco?: boolean): boolean {
         if (inside) {
             if (!$is.func(target)) {
-                this.logger.warn$({target, issue: 'not.expected.function'});
+                this.logger.deploy.$warning(FQN_PCK, 100, {type: typeof target, message: 'Invalid function'})
                 return false;
             }
         }
@@ -102,15 +102,13 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
         }
         const inspected = core.footprint.inspect(target);
         if (!inspected || inspected.type !== 'function') {
-            this.logger.warn$({target, inspected, issue: 'invalid.function'});
+            this.logger.deploy.$warning(FQN_PCK, 100, {type: typeof target, message: 'Invalid function'});
             return false;
         }
         const full = this._full(target.name, path);
         if (full) {
-            this.$setName(target, full);
-            if (path) {
-                this.$setPackage(target, path);
-            }
+            const naming = {basic: target.name, full, pck: path} as FqnNaming;
+            this.$set(target, naming);
             this.logger.debug(`function: ${full}`);
             if (isDeco) {
                 this._addDecoKeyword(target);
@@ -126,7 +124,7 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
     private _possibleLiteral(name: string, target: Arr, path: string, possible: boolean, inside: boolean): boolean {
         if (inside) {
             if (!Array.isArray(target)) {
-                this.logger.warn$({target, name, issue: 'not.expected.literal.array'});
+                this.logger.deploy.$warning(FQN_PCK, 100, {type: typeof target, name, message: 'Invalid literal array'});
                 return false;
             }
         }
@@ -140,7 +138,7 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
             return;
         }
         if (inspected.type !== 'object') {
-            this.logger.warn$({target, name, inspected, issue: 'invalid.literal'});
+            this.logger.deploy.$warning(FQN_PCK, 100, {type: typeof target, name, inspected, message: 'Invalid literal'});
             return false;
         }
         if (inspected.constructor?.name !== 'Array') {
@@ -167,10 +165,8 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
         }
         const full = this._full(name, path);
         if (full) {
-            this.$setName(target, full);
-            if (path) {
-                this.$setPackage(target, path);
-            }
+            const naming = {basic: name, full, pck: path} as FqnNaming;
+            this.$set(target, naming);
             this.logger.debug(`literal: ${full} ${possible ? '#possible' : ''}`);
 
             // call waiting hooks
@@ -187,7 +183,7 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
         }
         try {
             inspected.name = name;
-            core.nameHandler.set(fn as Func, name)
+            core.nameHandler.set(fn as Func, name);
 
             core.footprint.$secure.$save(fn, inspected);
         } catch (e) {
@@ -213,12 +209,12 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
             return;
         }
         if (!inspected || inspected.type !== 'object') {
-            this.logger.warn$({target, name, inspected, issue: 'invalid.object'});
+            this.logger.deploy.$warning(FQN_PCK, 100, {type: typeof target, name, inspected, message: 'Invalid object'});
             return false;
         }
         if (inspected.constructor?.name !== 'Object') {
             // constructor should be an object
-            this.logger.warn$({target, inspected, issue: 'invalid.object.construction'});
+            this.logger.deploy.$warning(FQN_PCK, 100, {type: typeof target, name, inspected, message: 'Invalid object construction'});
             return false;
         }
         if (inspected.keywords.includes('enum')) {
@@ -235,7 +231,8 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
 
         const full = this._full(name, path);
         if (full) {
-            this.$setName(target, full);
+            const naming = {basic: name, full, pck: path} as FqnNaming;
+            this.$set(target, naming);
             this.logger.debug(`object: ${full}`);
 
             // call waiting hooks
@@ -288,7 +285,7 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
 
         if (kind !== 'file') {
             if (Object.keys(target).length !== 1) {
-                this.logger.warn$({target, name, issue: 'group.should.have.be.only.one.child'});
+                this.logger.deploy.$warning(FQN_PCK, 100, {type: typeof target, name, message: 'Group should have only one child'});
                 return;
             }
             const [key, item] = Object.entries(target)[0];
@@ -318,12 +315,12 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
             return;
         }
         if (!inspected || inspected.type !== 'object') {
-            this.logger.warn$({target, name, inspected, issue: 'invalid.enum'});
+            this.logger.deploy.$warning(FQN_PCK, 100, {type: typeof target, name, message: 'Invalid enum'});
             return false;
         }
         if (inspected.constructor !== Object) {
             // constructor should be an object
-            this.logger.warn$({target, name, inspected, issue: 'invalid.enum.constructor'});
+            this.logger.deploy.$warning(FQN_PCK, 100, {type: typeof target, name, message: 'Invalid enum constructor'});
             return false;
         }
         let changed = false;
@@ -355,7 +352,8 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
 
         const full = this._full(name, path);
         if (full) {
-            this.$setName(target, full);
+            const naming = {basic: name, full, pck: path} as FqnNaming;
+            this.$set(target, naming);
             this.logger.debug(`enum: ${full} ${possible ? '#possible' : ''}`);
 
             // call waiting hooks
@@ -366,7 +364,7 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
         return false;
     }
 
-    private _clazzMembers(holder: Func | Obj, full: string, keyword: FootprintKeyword): void {
+    private _clazzMembers(holder: Func | Obj, naming: FqnNaming, keyword: FootprintKeyword): void {
         Object.getOwnPropertyNames(holder).forEach(property => {
             if (this._isValidMethod(holder, property)) {
                 const inspectedMember = core.footprint.inspect(holder[property]);
@@ -387,7 +385,12 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
                     if (changed) {
                         core.footprint.$secure.$save(holder[property], inspectedMember);
                     }
-                    this.$setName(holder[property], `${full}.${property}`);
+                    const newNaming = {...naming};
+                    newNaming.pck = naming.full;
+                    newNaming.full = `${newNaming.pck}${keyword === 'instance' ? '.' : '::'}${property}`;
+                    newNaming.basic = property;
+                    this.$set(holder[property], newNaming);
+
                 }
             }
         });
@@ -411,7 +414,7 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
             return;
         }
         if (!inspected || !['class', 'function'].includes(inspected.type)) {
-            this.logger.warn$({target, inspected, issue: 'invalid.class'});
+            this.logger.deploy.$warning(FQN_PCK, 100, {type: typeof target, message: 'Invalid class'});
             return false;
         }
         // check parent
@@ -421,19 +424,17 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
 
         const full = this._full(target.name, path);
         if (full) {
-            this.$setName(target, full);
-            if (path) {
-                this.$setPackage(target, path);
-            }
+            const naming = {basic: target.name, full, pck: path} as FqnNaming;
+            this.$set(target, naming);
             this.logger.debug(`class: ${full}`);
 
             // instance-members
             if (this._isEffectiveTarget(target.name, target.prototype)) {
-                this._clazzMembers(target.prototype, full, 'instance');
+                this._clazzMembers(target.prototype, naming, 'instance');
             }
 
             // static-members
-            this._clazzMembers(target, full, 'static');
+            this._clazzMembers(target, naming, 'static');
 
             // call waiting hooks
             $fqn.$secure.$runHooks(target, full);
@@ -445,18 +446,18 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
         if (!target) {
             return null;
         }
-        let name: string
+        let naming: FqnNaming;
         const type = typeof target;
         switch (type) {
             case "string":
                 return target;
             case "function":
-                name = $descriptor.getValue<string>(target, FqnNameSign);
-                return name ? name : (target as Func).name;
+                naming = this.$get(target);
+                return naming ? naming.full : (target as Func).name;
             case "object":
-                name = $descriptor.getValue<string>(target, FqnNameSign);
-                if (name) {
-                    return name;
+                naming = this.$get(target);
+                if (naming) {
+                    return naming.full;
                 }
                 if (target.constructor) {
                     return this.get(target.constructor);
@@ -469,11 +470,11 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
         if (!target) {
             return false;
         }
-        return $is.typeOf(target, 'function', 'object') ? $descriptor.remove(target, FqnNameSign, true) : false;
+        return $is.typeOf(target, 'function', 'object') ? $descriptor.remove(target, FqnAllSign, true) : false;
     }
 
     exists(target: any): boolean {
-        return !!$descriptor.get(target, FqnNameSign);
+        return !!$descriptor.get(target, FqnAllSign);
     }
 
     detail(target: any): FqnDetail {
@@ -526,39 +527,23 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
         }
     }
 
-    toFullName(name: string): FqnName {
-        name = this.normalizeName(name);
-        if (!name) {
-            return {basic: null, full: null};
-        }
-        if (!name.includes('.')) {
-            return {basic: name, full: name};
-        }
-        const parts = name.split('.');
-        return {basic: parts[parts.length - 1], full: name};
-    }
-
     copy(source: any, target: any): void {
         if (this.exists(source)) {
-            const name = this.get(source);
-            this.$setName(target, name);
-            const pack = this.$getPackage(source);
-            if (pack) {
-                this.$setPackage(target, pack);
-            }
+            this.$set(target, this.$get(source));
         }
     }
-    toPathName(name: string): FqnPath {
+    toNaming(name: string): FqnNaming {
         name = this.normalizeName(name);
         if (!name) {
-            return {name: null, path: null};
+            return {basic: undefined, full: undefined, pck: undefined};
         }
         if (!name.includes('.')) {
-            return {name, path: 'leyyo'};
+            return {basic: name, full: name, pck: undefined};
         }
         const parts = name.split('.');
         const basic = parts.pop();
-        return {name: basic, path: parts.join('.')};
+        const pck = parts.join('.');
+        return {basic, full: `${pck}.${basic}`, pck};
     }
 
     clazz(target: Func | ClassLike, path: string): void {
@@ -658,25 +643,18 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
     get $secure(): FqnHandlerSecure {
         return this;
     }
-
-    $setName(target: any, name: string): boolean {
-        if (!target) {
-            return false;
+    $set(target: any, naming: FqnNaming): boolean {
+        switch (typeof target) {
+            case "function":
+                return $descriptor.save<FqnNaming>(target, FqnAllSign, naming, true);
+            case "object":
+                break;
         }
-        return $descriptor.save<string>(target, FqnNameSign, name, true);
+        return false;
     }
-    $setPackage(target: any, pack: string): boolean {
-        if (!target) {
-            return false;
-        }
-        return $descriptor.save<string>(target, FqnPackageSign, pack, true);
-    }
-    $getPackage(target: any): string {
-        if (!target) {
-            return undefined;
-        }
+    $get(target: any): FqnNaming {
         if (['function', 'object'].includes(typeof target)) {
-            return $descriptor.getValue<string>(target, FqnPackageSign);
+            return $descriptor.getValue<FqnNaming>(target, FqnAllSign);
         }
         return undefined;
     }

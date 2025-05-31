@@ -1,6 +1,6 @@
 import {ClassLike, Dict, Func, Obj} from "@leyyo/common";
 import {DecoArguments, DecoInstanceLike} from "../instance";
-import {ClassReflectionLike, ParameterReflectionLike, PropertyReflectionLike} from "../../reflection";
+import {ClassReflectionLike, ParameterReflectionLike, PropertyReflectionLike, ReflectionTag} from "../../reflection";
 import {DecoRule, Target} from "../literals";
 import {DecoIdLike} from "../identifier";
 import {DecoCloneLike} from "../clone";
@@ -166,7 +166,7 @@ export interface DecoLike<V = Dict, M = Dict, P = V> {
 
     // endregion target
 
-    // region dirty
+    // region fqn
     /**
      * Sets fqn name as shortcut, it uses {@link FqnHandler#decorator}
      *
@@ -174,7 +174,7 @@ export interface DecoLike<V = Dict, M = Dict, P = V> {
      * */
     fqn(pack: string): this;
 
-    // endregion dirty
+    // endregion fqn
 
     // region dirty
     /**
@@ -253,6 +253,18 @@ export interface DecoLike<V = Dict, M = Dict, P = V> {
     // endregion processor
 
     // endregion getter
+
+    // region sort
+    isBefore(deco: DecoLike): boolean;
+    isBefore(fn: Func): boolean;
+    isBefore(name: string): boolean;
+    before(...functions: Array<Func|string>): this;
+
+    isAfter(deco: DecoLike): boolean;
+    isAfter(fn: Func): boolean;
+    isAfter(name: string): boolean;
+    after(...functions: Array<Func|string>): this;
+    // endregion sort
 
     // region class
     /**

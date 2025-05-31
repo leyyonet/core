@@ -52,6 +52,11 @@ export const DecoRuleItems = [
     'iterable',
 
     /*
+    * Decorator assignment will not be copied for several usage: cast, rule, ...
+    * */
+    'no-copy',
+
+    /*
     * This kind of decorator changes structure
     * - for class: new proxied class will extend the existing
     * - for method: descriptor (value function) will be changed

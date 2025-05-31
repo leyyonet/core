@@ -1,6 +1,7 @@
-import {$assert, $descriptor, $dev, $is, $repo, Arr, Dict, Func, List} from "@leyyo/common";
-import {CoreReflectionLike} from "./index-types";
+import {$assert, $dev, $is, $repo, Arr, Dict, Func, List} from "@leyyo/common";
+import {CoreReflectionLike, ReflectionMeta, ReflectionTag} from "./index-types";
 import {
+    DecoArguments,
     DecoCLearType,
     DecoClone,
     DecoDoc,
@@ -20,6 +21,8 @@ import {FQN_PCK} from "../internal";
 
 export abstract class AbstractReflection implements CoreReflectionLike {
     // region properties
+    private static readonly EMPTY_TAGS = [] as Array<ReflectionTag>;
+    private static readonly EMPTY_META = {} as ReflectionMeta;
     private static FILTER = {
         belongs: ['self', 'parent'],
         kind: ['field', 'method'],
@@ -30,16 +33,16 @@ export abstract class AbstractReflection implements CoreReflectionLike {
     protected _target: Target;
     protected _type: Func;
 
-    protected readonly _docs: List<DecoDoc>;
-    protected readonly _decorators: Array<DecoLike>;
-    protected _hasInherited: boolean;
-    protected _hasSelf: boolean;
+    private _docs: List<DecoDoc>;
+    private _decorators: Array<DecoIdLike>;
+    private _keywords: List<ReflectionTag>;
+    private _metadata: ReflectionMeta;
+    private _hasInherited: boolean;
+    private _hasSelf: boolean;
 
     // endregion properties
     protected constructor(...args: Array<any>) {
         this._code = args.join('.');
-        this._docs = $repo.newList(FQN_PCK, this._code, 'docs');
-        this._decorators = [];
     }
 
     // region private
@@ -58,15 +61,16 @@ export abstract class AbstractReflection implements CoreReflectionLike {
     // endregion private
     // region getters
     // noinspection JSUnusedLocalSymbols
-    info(detailed?: boolean): Dict {
+    info(_detailed?: boolean): Dict {
         const result = {identifiers: []};
-
-        for (const doc of this._docs) {
-            result.identifiers.push({
-                identifier: doc.ins.identifier.name,
-                inherited: doc.inherited,
-                value: doc.value,
-            });
+        if (this._docs) {
+            result.identifiers.push(...this._docs.map(doc => {
+                return {
+                    identifier: doc.ins.identifier.name,
+                    inherited: doc.inherited,
+                    value: doc.value,
+                };
+            }))
         }
         return result;
     }
@@ -86,9 +90,124 @@ export abstract class AbstractReflection implements CoreReflectionLike {
     }
 
     // endregion getters
+
+    appendKeyword(tag: ReflectionTag): this {
+        if (!tag) {
+            return this;
+        }
+        if (!this._keywords) {
+            this._keywords = new List();
+        }
+        if (!this._keywords.includes(tag)) {
+            this._keywords.push(tag);
+        }
+        return this;
+    }
+    removeKeyword(tag: string|symbol): this {
+        if (!tag || !this._keywords) {
+            return this;
+        }
+        if (this._keywords.includes(tag)) {
+            this._keywords.delete(tag);
+        }
+        return this;
+    }
+    listKeywords(): Array<string|symbol> {
+        if (!this._keywords) {
+            return AbstractReflection.EMPTY_TAGS;
+        }
+        return [...this._keywords];
+    }
+    deleteMetaKey(key: ReflectionTag): this {
+        if (!$is.text(key) && typeof key !== 'symbol') {
+            return this;
+        }
+        if (!this._metadata) {
+            return this;
+        }
+        if (this._metadata[key as string] !== undefined) {
+            delete this._metadata[key as string];
+        }
+        return this;
+
+    }
+    setMetaKey(key: ReflectionTag, value: any): this {
+        if (!$is.text(key) && typeof key !== 'symbol') {
+            return this;
+        }
+        if (!this._metadata) {
+            this._metadata = {};
+        }
+        this._metadata[key as string] = value;
+        return this;
+    }
+    hasMetaKey(key: ReflectionTag): boolean {
+        if (!$is.text(key) && typeof key !== 'symbol') {
+            return false;
+        }
+        if (!this._metadata) {
+            return false;
+        }
+        return !!this._metadata[key];
+    }
+    getMetaKey<T = any>(key: ReflectionTag): T {
+        if (!$is.text(key) && typeof key !== 'symbol') {
+            return undefined;
+        }
+        if (!this._metadata) {
+            return undefined;
+        }
+        return this._metadata[key];
+    }
+    getMetadata<R extends ReflectionMeta = ReflectionMeta>(): R {
+        if (!this._metadata) {
+            return AbstractReflection.EMPTY_META as R;
+        }
+        return {...this._metadata} as R;
+    }
+
     // region decorator
 
+    protected _copyDecorators(source: CoreReflectionLike, target: CoreReflectionLike, args: DecoArguments): void {
+        source.docsAll().forEach(doc => {
+            if (doc.ins.identifier.hasRule('no-copy')) {
+                return;
+            }
+            try {
+                if (doc.inherited) {
+                    target.setValue(doc.ins, doc.value);
+                }
+                else {
+                    target.setValue(doc.ins.copy(target, args), doc.value);
+                }
+            } catch (_e) {
+            }
+        });
+    }
+
+    sortValues(): this {
+        if (!this._docs) {
+            return this;
+        }
+        const sorted = this._docs.slice().sort((a, b) => {
+            const left = a.ins.identifier;
+            const right = b.ins.identifier;
+            if (left.isBefore(right) || right.isAfter(left)) {
+                return -1;
+            }
+            if (left.isAfter(right) || right.isBefore(left)) {
+                return 1;
+            }
+            return 0;
+        });
+        this._docs.clear();
+        this._docs.push(...sorted);
+        return this;
+    }
     clearValue(ins: DecoInstanceLike): this {
+        if (!this._docs) {
+            return this;
+        }
         const id = ins.identifier;
         this._docs
             .filter(doc => doc.ins.identifier === id)
@@ -96,6 +215,14 @@ export abstract class AbstractReflection implements CoreReflectionLike {
                 this._docs.delete(doc);
             });
         return this;
+    }
+    private _createDocs(clear?: boolean): void {
+        if (!this._docs) {
+            this._docs = $repo.newList(FQN_PCK, this._code, 'docs');
+        }
+        else if (clear) {
+            this._docs.splice(0, this._docs.length);
+        }
     }
     setValue<V extends Dict>(ins: DecoInstanceLike, value: V): this {
         const id = ins.identifier;
@@ -106,8 +233,7 @@ export abstract class AbstractReflection implements CoreReflectionLike {
         if (id.hasRule('no-inherited') && inherited) {
             return this;
         }
-
-        const found = this._docs.filter(doc => doc.ins.identifier === id);
+        const found = this._docs ? this._docs.filter(doc => doc.ins.identifier === id) : [];
         let refreshDecorators = true;
         // more docs for one deco
         if (found.length > 0) {
@@ -119,10 +245,12 @@ export abstract class AbstractReflection implements CoreReflectionLike {
             }
             if (id.hasRule('override-if-exists') && !id.hasRule('iterable')) {
                 // clear values
-                const clone = this._docs.filter(doc => doc.ins.identifier !== id);
-                this._docs.splice(0, this._docs.length);
-                this._docs.push(...clone);
-                clone.splice(0, clone.length);
+                const clone = this._docs ? this._docs.filter(doc => doc.ins.identifier !== id) : [];
+                if (clone.length > 0) {
+                    this._createDocs(true);
+                    this._docs.push(...clone);
+                    clone.splice(0, clone.length);
+                }
                 refreshDecorators = false;
             }
         }
@@ -133,14 +261,16 @@ export abstract class AbstractReflection implements CoreReflectionLike {
         }
         const cloned = Array.isArray(value) ? [...value] : {...value};
         if (id.hasRule('iterable')) {
-            const selected = this._docs.filter(doc => doc.ins.identifier === id);
+            const selected = this._docs ? this._docs.filter(doc => doc.ins.identifier === id) : [];
             const arr = Array.isArray(cloned) ? cloned : [cloned];
             if (selected.length > 0) {
                 (selected[0].value as Arr).push(...arr);
             } else {
+                this._createDocs();
                 this._docs.push({ins, inherited, value: arr});
             }
         } else {
+            this._createDocs();
             this._docs.push({ins, inherited, value: cloned});
         }
         if (refreshDecorators) {
@@ -150,26 +280,32 @@ export abstract class AbstractReflection implements CoreReflectionLike {
     }
 
     protected _refreshDecorators(): void {
-        this._decorators.splice(0, this._decorators.length);
+        if (!this._docs) {
+            return;
+        }
+        this._decorators = [];
         this._docs
             .map(doc => doc.ins.identifier)
-            .forEach(deco => {
-                if (!this._decorators.includes(deco)) {
-                    this._decorators.push(deco);
+            .forEach(id => {
+                if (!this._decorators.includes(id)) {
+                    this._decorators.push(id);
                 }
             });
     }
 
-    decorators(filter?: DecoFilterBelongs): Array<DecoLike> {
+    decorators(filter?: DecoFilterBelongs): Array<DecoIdLike> {
+        if (!this._decorators) {
+            return [];
+        }
         if (!filter) {
             return [...this._decorators];
         }
-        const arr = [] as Array<DecoLike>;
+        const arr = [] as Array<DecoIdLike>;
         this.docsByFilter(filter)
             .map(doc => doc.ins.identifier)
-            .forEach(deco => {
-                if (!arr.includes(deco)) {
-                    arr.push(deco);
+            .forEach(id => {
+                if (!arr.includes(id)) {
+                    arr.push(id);
                 }
             });
         return arr;
@@ -268,7 +404,7 @@ export abstract class AbstractReflection implements CoreReflectionLike {
     }
 
     docsAll<V = Dict>(): Array<DecoDoc<V>> {
-        return [...this._docs] as Array<DecoDoc<V>>;
+        return this._docs ? [...this._docs] as Array<DecoDoc<V>> : [];
     }
 
     docsByFilter<V = Dict>(filter?: DecoFilterBelongs): Array<DecoDoc<V>> {
@@ -280,10 +416,10 @@ export abstract class AbstractReflection implements CoreReflectionLike {
                 }
                 // expected owned and all of them are owned
                 if (!this._hasInherited) {
-                    return [...this._docs] as Array<DecoDoc<V>>;
+                    return this._docs ? [...this._docs] as Array<DecoDoc<V>> : [];
                 }
                 // filter if it is owned
-                return this._docs.filter(doc => !doc.inherited) as Array<DecoDoc<V>>;
+                return this._docs ? this._docs.filter(doc => !doc.inherited) as Array<DecoDoc<V>> : [];
             case "parent":
                 // expected inherited but there is not any inherited
                 if (!this._hasInherited) {
@@ -291,13 +427,13 @@ export abstract class AbstractReflection implements CoreReflectionLike {
                 }
                 // expected inherited and all of them are inherited
                 if (!this._hasSelf) {
-                    return [...this._docs] as Array<DecoDoc<V>>;
+                    return this._docs ? [...this._docs] as Array<DecoDoc<V>> : [];
                 }
                 // filter if it is inherited
-                return this._docs.filter(doc => doc.inherited) as Array<DecoDoc<V>>;
+                return this._docs ? this._docs.filter(doc => doc.inherited) as Array<DecoDoc<V>> : [];
             default:
                 // all of them
-                return [...this._docs] as Array<DecoDoc<V>>;
+                return this._docs ? [...this._docs] as Array<DecoDoc<V>> : [];
         }
     }
 
@@ -338,7 +474,7 @@ export abstract class AbstractReflection implements CoreReflectionLike {
             });
         }
         const remaining = [] as Array<DecoDoc>;
-        if (onlyInherited || onlySelected) {
+        if ((onlyInherited || onlySelected) && this._docs) {
             for (const doc of this._docs) {
                 if (onlySelected && !ids.includes(doc.ins.identifier)) {
                     remaining.push(doc);
@@ -348,8 +484,11 @@ export abstract class AbstractReflection implements CoreReflectionLike {
             }
         }
         // clear all
-        this._docs.splice(0, this._docs.length);
+        if (this._docs) {
+            delete this._docs;
+        }
         if (remaining.length) {
+            this._createDocs();
             this._docs.push(...remaining);
         }
         this._refreshDecorators();
@@ -358,7 +497,7 @@ export abstract class AbstractReflection implements CoreReflectionLike {
 
     toJSON(_simple?: boolean): any {
         return {
-            decorators: this._decorators?.map(d => d.name),
+            decorators: this._decorators ? this._decorators?.map(d => d.name) : [],
         }
     }
     get code(): string {

@@ -14,9 +14,7 @@ export interface FqnHandlerLike extends ShiftSecure<FqnHandlerSecure> {
 
     normalizeName(name: string): string;
 
-    toFullName(name: string): FqnName;
-
-    toPathName(name: string): FqnPath;
+    toNaming(name: string): FqnNaming;
 
     copy(source: any, target: any): void;
 
@@ -46,9 +44,8 @@ export interface FqnHandlerLike extends ShiftSecure<FqnHandlerSecure> {
 }
 
 export interface FqnHandlerSecure extends ShiftMain<FqnHandlerLike> {
-    $setName(target: any, name: string): boolean;
-    $setPackage(target: any, pack: string): boolean;
-    $getPackage(target: any): string;
+    $set(target: any, naming: FqnNaming): boolean;
+    $get(target: any): FqnNaming;
 }
 
 export type FqnGroupType = 'namespace' | 'module' | 'file';
@@ -57,12 +54,8 @@ export interface FqnDetail extends FootprintInspected {
     full: string;
 }
 
-export interface FqnName {
+export interface FqnNaming {
     basic: string;
-    full: string;
-}
-
-export interface FqnPath {
-    name: string;
-    path: string;
+    full?: string;
+    pck?: string;
 }

@@ -1,7 +1,7 @@
 import {$descriptor, $dev, $repo, $sys, ClassLike, Dict, Fnc, Func, Obj} from "@leyyo/common";
 import {AbstractReflection} from "../abstract";
 import {PropertyReflection, PropertyReflectionLike} from "../property";
-import {DecoFilter, DecoFilterKind, DecoKeyword, DecoKind} from "../../decorator";
+import {DecoArgumentClass, DecoFilter, DecoFilterKind, DecoKeyword, DecoKind} from "../../decorator";
 import {ClassReflectionCopyLambda, ClassReflectionLike, ClassReflectionSecure} from "./index.types";
 import {core} from "../../core";
 import {FootprintInspected} from "../../footprint";
@@ -14,12 +14,12 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
     // region properties
 
     private readonly _parent: ClassReflectionLike;
-    private _body: Obj;
     private readonly _creator: ClassLike;
-    private readonly _inspected: FootprintInspected;
     private readonly _instanceMap: Map<PropertyKey, PropertyReflectionLike>;
     private readonly _staticMap: Map<PropertyKey, PropertyReflectionLike>;
-    private readonly _propCache: Map<PropertyKey, Array<PropertyReflectionLike>>;
+    private readonly _body: Obj;
+    private _inspected: FootprintInspected;
+    private _propCache: Map<PropertyKey, Array<PropertyReflectionLike>>;
     private static _functionProperties = [] as Array<string>;
     // endregion properties
     // region methods
@@ -28,13 +28,10 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
         this._target = 'class';
         this._instanceMap = $repo.newMap(FQN_PCK, this._code, 'instance');
         this._staticMap = $repo.newMap(FQN_PCK, this._code, 'static');
-        this._propCache = $repo.newMap(FQN_PCK, this._code, 'cache');
         this._creator = creator;
         this._type = creator as Func;
         this._body = prototype ?? creator.prototype;
-        this._inspected = core.footprint.inspect(creator);
         const prototypeOf = Object.getPrototypeOf(creator);
-        // console.log(`${creator.name}.prototypeOf => ${typeof prototypeOf}`);
         if (prototypeOf && prototypeOf.name && !$sys.isSysClass(prototypeOf.name)) {
             this._parent = core.reflectionPool.registerClass(prototypeOf);
             const oldDocs = this._parent.docsAll();
@@ -120,6 +117,9 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
         let props: Array<PropertyReflectionLike>;
         filter = this._filter(filter, 'kind');
         const key = `${this.name}~${keyword}~${filter.kind ?? ''}`;
+        if (!this._propCache) {
+            this._propCache = $repo.newMap(FQN_PCK, this._code, 'cache');
+        }
         if (this._propCache.has(key)) {
             return this._propCache.get(key);
         }
@@ -186,6 +186,9 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
     }
 
     get inspected(): FootprintInspected {
+        if (!this._inspected) {
+            this._inspected = core.footprint.inspect(this._creator);
+        }
         return this._inspected;
     }
 
@@ -271,6 +274,10 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
     }
 
     // endregion any-properties
+
+    copyDecorators(source: ClassReflectionLike, args: DecoArgumentClass): void {
+        this._copyDecorators(source, this, args);
+    }
     // region secure
 
     get $back(): ClassReflectionLike {
@@ -306,12 +313,6 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
         }
     }
 
-    $usePrototypeAsBody(): void {
-        if (!this._body) {
-            this._body = this.creator.prototype;
-        }
-    }
-
     // endregion secure
 
     toJSON(simple?: boolean) {
@@ -320,8 +321,6 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
                 ...{
                     parent: this._parent?.description,
                     creator: this._creator?.name,
-                    inspected: this._inspected,
-
                     instanceMembers: Array.from(this._instanceMap.values()).map(c => c.toJSON(true)),
                     staticMembers: Array.from(this._staticMap.values()).map(c => c.toJSON(true))
                 }, ...super.toJSON()
@@ -332,7 +331,7 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
                 __: ClassReflection.name,
                 parent: this._parent?.description,
                 creator: this._creator?.name,
-                inspected: this._inspected,
+                inspected: this.inspected,
 
                 instanceMembers: Array.from(this._instanceMap.values()),
                 staticMembers: Array.from(this._staticMap.values()),

@@ -1,20 +1,18 @@
 import "reflect-metadata";
-import {$assert, $descriptor, $dev, $repo, Dict, Func, Obj} from "@leyyo/common";
+import {$assert, $dev, $repo, Dict, Func} from "@leyyo/common";
 import {AbstractReflection} from "../abstract";
 import {ParameterReflection, ParameterReflectionLike} from "../parameter";
 import {
     PropertyReflectionLike,
-    PropertyReflectionMethod,
-    PropertyReflectionMethodCallback,
     PropertyReflectionSecure
 } from "./index.types";
 import {ClassReflectionLike} from "../class";
 import {
-    DecoArgumentField, DecoArgumentMethod,
+    DecoArgumentField,
+    DecoArgumentMethod,
     DecoDoc,
     DecoFilterKeyword,
     DecoFilterKind,
-    DecoInstanceLike,
     DecoKeyword,
     DecoKind
 } from "../../decorator";
@@ -33,31 +31,25 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
     protected readonly _keyword: DecoKeyword;
     protected readonly _kind: DecoKind;
     protected readonly _proto: PropertyReflectionLike;
-    protected readonly _inspected: FootprintInspected;
+    protected _inspected: FootprintInspected;
     protected _description: string;
-    protected _methodCallback: PropertyReflectionMethod;
     // endregion properties
     // region methods
     constructor(clazz: ClassReflectionLike, name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func, clone?: boolean) {
         super(clazz.code, name, keyword, kind);
-        this._parameters = $repo.newArray(FQN_PCK, this._code, 'parameters');
         this._clazz = clazz;
         this._name = name as string;
         this._keyword = keyword;
-        this._proto = null;
         if (kind === 'method') {
+            this._parameters = $repo.newArray(FQN_PCK, this._code, 'parameters');
             this._kind = kind;
             this._callable = typeof callable === 'function' ? callable : null;
             this._target = 'method';
             let paramsListed = false;
-            if (!this._clazz.body) {
-                this.clazz.$secure.$usePrototypeAsBody();
-            }
             if (this._clazz.body) {
                 if (!this._callable) {
                     this._callable = this._clazz.body[this._name];
                 }
-                this._inspected = core.footprint.inspect(this._callable) ?? core.footprint.inspect(this._clazz.body[this._name]);
                 this._type = Reflect.getMetadata('design:returntype', this._clazz.body, this._name as string) as Func;
                 const params = Reflect.getMetadata('design:paramtypes', this._clazz.body, this._name as string) as Array<Func>;
                 if (Array.isArray(params)) {
@@ -70,7 +62,6 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
                 if (!this._callable) {
                     this._callable = this._clazz.creator[this._name];
                 }
-                this._inspected = core.footprint.inspect(this._callable) ?? core.footprint.inspect(this._clazz.creator[this._name]);
                 this._type = Reflect.getMetadata('design:returntype', this._clazz.creator, this._name as string) as Func;
                 const params = Reflect.getMetadata('design:paramtypes', this._clazz.creator, this._name as string) as Array<Func>;
                 if (Array.isArray(params)) {
@@ -106,15 +97,13 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
                             if (this._kind === 'field') {
                                 const fieldArgs = doc.ins.arguments as DecoArgumentField;
                                 newDeco.ins = doc.ins.copy(this, [fieldArgs[0], this._name]);
-                            }
-                            else {
+                            } else {
                                 const methodArgs = doc.ins.arguments as DecoArgumentMethod;
                                 newDeco.ins = doc.ins.copy(this, [methodArgs[0], this._name, methodArgs[2]]);
                             }
                             this.setValue(newDeco.ins, newDeco);
                         });
-                    }
-                    else {
+                    } else {
                         oldDocs.forEach(doc => {
                             this.setValue(doc.ins, doc);
                         });
@@ -143,7 +132,7 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
         }
         if (detailed && this._kind === "method") {
             rec['callable'] = core.fqnHandler.detail(this._callable);
-            rec['parameters'] = this._parameters.map(p => p.info(detailed));
+            rec['parameters'] = this._parameters ? this._parameters.map(p => p.info(detailed)) : [];
         }
         if (this._proto) {
             rec['proto'] = {'$ref': this._proto.description};
@@ -191,21 +180,38 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
     }
 
     get inspected(): FootprintInspected {
-        return this._inspected;
+        if (this._kind === 'field') {
+            return undefined;
+        }
+        if (this._inspected === undefined) {
+            if (typeof this._callable === 'function') {
+                this._inspected = core.footprint.inspect(this._callable);
+            }
+            else if (this._keyword === 'static' && typeof this._clazz.creator[this._name] === 'function') {
+                    this._inspected = core.footprint.inspect(this._clazz.creator[this._name]);
+                }
+            else if (this._keyword === 'instance' && this._clazz.body && typeof this._clazz.body[this._name] === 'function') {
+                this._inspected = core.footprint.inspect(this._clazz.body[this._name]);
+            }
+            else {
+                this._inspected = null;
+            }
+        }
+        return this._inspected === null ? undefined : this._inspected;
     }
 
     // endregion getters
     // region parameters
     listParameters(): Array<ParameterReflectionLike> {
-        return [...this._parameters]; // cloned
+        return this._parameters ? [...this._parameters] : [];
     }
 
     hasParameter(index: number): boolean {
-        return this._parameters[index] !== undefined;
+        return this._parameters ? this._parameters[index] !== undefined : false;
     }
 
     getParameter(index: number): ParameterReflectionLike {
-        return this._parameters[index] ?? null;
+        return this._parameters ? this._parameters[index] : undefined;
     }
 
     parametersBy(decorator: Func | string): Array<ParameterReflectionLike> {
@@ -213,7 +219,7 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
         if (!id) {
             return [];
         }
-        return [...this._parameters.filter(param => param.filterByBelongs(id.fn))]; //cloned
+        return this._parameters ? [...this._parameters.filter(param => param.filterByBelongs(id.fn))] : [];
     }
 
     // endregion parameters
@@ -241,6 +247,31 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
     }
 
     // endregion filter-by
+
+    copyDecorators(source: PropertyReflectionLike, args: DecoArgumentField | DecoArgumentMethod): void {
+        if (source.keyword !== this._keyword) {
+            throw $dev.developerError({
+                issue: 'keywords should be same',
+                source: source.description,
+                target: this.description,
+                expected: this._keyword,
+                current: source.keyword,
+                where: 'leyyo.reflection.PropertyReflection'
+            });
+        }
+        if (source.kind !== this._kind) {
+            throw $dev.developerError({
+                issue: 'Kinds should be same',
+                source: source.description,
+                target: this.description,
+                expected: this._kind,
+                current: source.kind,
+                where: 'leyyo.reflection.PropertyReflection'
+            });
+        }
+        this._copyDecorators(source, this, args);
+    }
+
     // region secure
     get $secure(): PropertyReflectionSecure {
         return this;
@@ -250,62 +281,52 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
         return this;
     }
 
-    $setFieldType(type: Func): this {
+    $setType(type: Func): this {
         $assert.func(type, () => $dev.opt({
             name: this.description,
             field: 'type',
-            method: '$setFieldType',
+            method: '$setType',
             where: 'leyyo.reflection.PropertyReflection'
         }));
-        if (this._target !== 'field') {
-            throw $dev.developerError({
-                issue: 'method.type.can.not.be.changed',
-                target: this._target,
-                method: '$setFieldType',
-                where: 'leyyo.reflection.PropertyReflection'
-            });
+        if (this._type && this._type !== type) {
+            let index = 0;
+            while (this.hasMetaKey(`$type-${index}`)) {
+                index++;
+            }
+            this.setMetaKey(`$type-${index}`, this._type);
         }
         this._type = type;
         return this;
     }
 
-    $setMethodCallable(callable: Func): this {
+    $setCallable(callable: Func): this {
         $assert.func(callable, () => $dev.opt({
             name: this.description,
             field: 'callable',
-            method: '$setMethodCallable',
+            method: '$setCallable',
             where: 'leyyo.reflection.PropertyReflection'
         }));
         if (this._target !== 'method') {
             throw $dev.developerError({
                 issue: 'field.callable.can.not.be.changed',
                 target: this._target,
-                method: '$setMethodCallable',
+                method: '$setCallable',
                 where: 'leyyo.reflection.PropertyReflection'
             });
+        }
+        if (this._callable && this._callable !== callable) {
+            let index = 0;
+            while (this.hasMetaKey(`$callable-${index}`)) {
+                index++;
+            }
+            this.setMetaKey(`$callable-${index}`, this._callable);
+        }
+        if (this._inspected) {
+            delete this._inspected;
         }
         this._callable = callable;
         return this;
     }
-
-    get $methodCallback(): PropertyReflectionMethod {
-        return this._methodCallback;
-    }
-
-    $setMethodCallback(fn: PropertyReflectionMethodCallback): this {
-        $assert.func(fn, () => $dev.opt({
-            field: 'methodCallback',
-            desc: this._description,
-            where: 'leyyo.reflection.PropertyReflection'
-        }));
-
-        this._methodCallback = {fn};
-        if (core.footprint.isAsync(fn, true)) {
-            this._methodCallback.isAsync = true;
-        }
-        return this;
-    }
-
     // endregion secure
 
     toJSON(simple?: boolean) {
@@ -317,7 +338,7 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
                         kind: this._kind,
                         keyword: this._keyword,
                         returnType: this._type?.name,
-                        parameters: this._parameters,
+                        parameters: this._parameters ?? [],
                     }, ...super.toJSON()
                 };
             }
@@ -339,7 +360,7 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
                     kind: this._kind,
                     keyword: this._keyword,
                     returnType: this._type?.name,
-                    parameters: this._parameters,
+                    parameters: this._parameters ?? [],
                 }, ...super.toJSON()
             };
         }

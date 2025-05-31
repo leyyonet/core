@@ -1,5 +1,5 @@
 import {$assert, $descriptor, $dev, $is, $log, KeyValue, Obj} from "@leyyo/common";
-import {EnumItem, EnumNonFunctional, EnumObject, EnumPoolLike, EnumPoolSecure, EnumType} from "./index.types";
+import {EnumItem, EnumNonFunctional, EnumValue, EnumPoolLike, EnumPoolSecure, EnumType} from "./index.types";
 import {NamedDepotItem, NamedDepotLike, NamedDepotName, NamedDepotSecure} from "../named";
 import {core} from "../core";
 import {FQN_PCK} from "./internal";
@@ -8,11 +8,11 @@ import {EnumSign} from "./index.symbols";
 
 export class EnumPool implements EnumPoolLike, EnumPoolSecure {
     private readonly logger = $log.create(EnumPool);
-    protected readonly _depot: NamedDepotLike<EnumItem, EnumObject>;
-    protected readonly _secure: NamedDepotSecure<EnumItem, EnumObject>;
+    protected readonly _depot: NamedDepotLike<EnumItem, EnumValue>;
+    protected readonly _secure: NamedDepotSecure<EnumItem, EnumValue>;
 
     constructor() {
-        this._depot = core.namedPool.assign<EnumItem, EnumObject>(
+        this._depot = core.namedPool.assign<EnumItem, EnumValue>(
             FQN_PCK, 'pool.items',
             ins => ins.pointer,
             ins => !!ins.pointer && Array.isArray(ins.items) && ['enumeration', 'literal'].includes(ins.type)
@@ -21,7 +21,7 @@ export class EnumPool implements EnumPoolLike, EnumPoolSecure {
     }
 
     // region private
-    private _add(value: EnumItem, ...aliases: Array<string>): NamedDepotItem<EnumItem, EnumObject> {
+    private _add(value: EnumItem, ...aliases: Array<string>): NamedDepotItem<EnumItem, EnumValue> {
         const [base, lookup] = this._secure.$add(value, ...aliases);
         this.logger.debug(`${lookup.full ?? lookup.basic} is registered`);
 
@@ -37,7 +37,7 @@ export class EnumPool implements EnumPoolLike, EnumPoolSecure {
     // endregion private
 
     // region public
-    getBase(value: NamedDepotName, required?: boolean): NamedDepotItem<EnumItem, EnumObject> {
+    getBase(value: NamedDepotName, required?: boolean): NamedDepotItem<EnumItem, EnumValue> {
         return this._depot.get(value, required);
     }
 
@@ -73,11 +73,11 @@ export class EnumPool implements EnumPoolLike, EnumPoolSecure {
         this.$add(target);
     }
 
-    hasSign(value: EnumObject): boolean {
+    hasSign(value: EnumValue): boolean {
         return $descriptor.has(value, EnumSign);
     }
 
-    getSign(value: EnumObject): string {
+    getSign(value: EnumValue): string {
         return $descriptor.getValue<string>(value, EnumSign);
     }
 
@@ -92,7 +92,7 @@ export class EnumPool implements EnumPoolLike, EnumPoolSecure {
         return this;
     }
 
-    $add(target: EnumObject): void {
+    $add(target: EnumValue): void {
         const isMap = $is.bareObject(target);
         let items: Array<KeyValue>;
         let type: EnumType;

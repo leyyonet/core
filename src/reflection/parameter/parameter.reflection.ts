@@ -5,6 +5,7 @@ import {PropertyReflectionLike} from "../property";
 import {core} from "../../core";
 import {$$coreInternalOn} from "../../internal";
 import {FQN_PCK} from "../internal";
+import {DecoArgumentParam} from "../../decorator";
 
 
 // noinspection Annotator
@@ -83,6 +84,9 @@ export class ParameterReflection extends AbstractReflection implements Parameter
 
     // endregion getters
 
+    copyDecorators(source: ParameterReflectionLike, args: DecoArgumentParam): void {
+        this._copyDecorators(source, this, args);
+    }
     // region secure
     get $back(): ParameterReflectionLike {
         return this;
@@ -98,6 +102,13 @@ export class ParameterReflection extends AbstractReflection implements Parameter
             name: this.description,
             where: 'leyyo.reflection.ParameterReflection'
         }));
+        if (this._type && this._type !== type) {
+            let index = 0;
+            while (this.hasMetaKey(`$type-${index}`)) {
+                index++;
+            }
+            this.setMetaKey(`$type-${index}`, this._type);
+        }
         this._type = type;
         return this;
     }

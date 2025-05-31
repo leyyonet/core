@@ -1,6 +1,16 @@
 import {Dict, Func} from "@leyyo/common";
-import {DecoDoc, DecoDocExtended, DecoFilterBelongs, DecoInstanceLike, DecoLike, Target} from "../../decorator";
+import {
+    DecoDoc,
+    DecoDocExtended,
+    DecoFilterBelongs,
+    DecoIdLike,
+    DecoInstanceLike,
+    DecoLike,
+    Target
+} from "../../decorator";
 
+export type ReflectionTag = string|symbol;
+export type ReflectionMeta = Record<ReflectionTag, any>;
 export interface CoreReflectionLike {
     // region getters
     info(detailed?: boolean): Dict;
@@ -16,11 +26,22 @@ export interface CoreReflectionLike {
     get code(): string;
 
     // endregion getters
+
+    appendKeyword(tag: ReflectionTag): this;
+    removeKeyword(tag: ReflectionTag): this;
+    listKeywords(): Array<ReflectionTag>;
+    deleteMetaKey(key: ReflectionTag): this;
+    setMetaKey(key: ReflectionTag, value: any): this;
+    hasMetaKey(key: ReflectionTag): boolean;
+    getMetaKey<T = any>(key: ReflectionTag): T;
+    getMetadata<R extends ReflectionMeta = ReflectionMeta>(): R;
+
     // region decorator
     setValue<V extends Dict>(ins: DecoInstanceLike, value: V): this;
+    sortValues(): this;
     clearValue(ins: DecoInstanceLike): this;
 
-    decorators(filter?: DecoFilterBelongs): Array<DecoLike>;
+    decorators(filter?: DecoFilterBelongs): Array<DecoIdLike>;
 
     hasDecorator(fn: Func, filter?: DecoFilterBelongs): boolean;
 

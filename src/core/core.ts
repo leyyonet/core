@@ -12,7 +12,6 @@ import {NameHandlerLike} from "../name";
 import {$$coreInternalOn} from "../internal";
 import {FQN_PCK} from "./internal";
 
-
 class Core implements CoreLike, CoreSecure {
     constructor() {
     }
