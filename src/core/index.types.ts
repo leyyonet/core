@@ -8,7 +8,6 @@ import {EnumPoolLike} from "../enum";
 import {ProxyHandlerLike} from "../proxy";
 import {BindHandlerLike} from "../bind";
 import {LifecycleLike} from "../lifecycle";
-import {NameHandlerLike} from "../name";
 
 export interface CoreLike extends ShiftSecure<CoreSecure> {
     get decoratorPool(): DecoratorPoolLike;
@@ -24,7 +23,6 @@ export interface CoreLike extends ShiftSecure<CoreSecure> {
     get enumPool(): EnumPoolLike;
 
     get proxyHandler(): ProxyHandlerLike;
-    get nameHandler(): NameHandlerLike;
 
     get bindHandler(): BindHandlerLike;
 
@@ -45,7 +43,6 @@ export interface CoreSecure extends ShiftMain<CoreLike> {
     $setEnumPool(ins: EnumPoolLike): CoreSecure;
 
     $setProxyHandler(ins: ProxyHandlerLike): CoreSecure;
-    $setNameHandler(ins: NameHandlerLike): CoreSecure;
 
     $setBindHandler(ins: BindHandlerLike): CoreSecure;
 

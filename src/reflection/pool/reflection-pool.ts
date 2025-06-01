@@ -1,4 +1,4 @@
-import {$descriptor, $dev, $is, $log, ClassLike, Fnc, Func, Obj} from "@leyyo/common";
+import {$descriptor, $dev, $is, $log, $name, ClassLike, Fnc, Func, Obj} from "@leyyo/common";
 import {ClassReflection, ClassReflectionCopyLambda, ClassReflectionLike} from "../class";
 import {ReflectionPoolLike} from "./index.types";
 import {DecoFilter} from "../../decorator";
@@ -108,7 +108,7 @@ export class ReflectionPool implements ReflectionPoolLike {
             // add to class repo
             this.registerClass(targetPointer, null);
         }
-        core.nameHandler.copy(sourcePointer, targetPointer);
+        $name.copy(sourcePointer, targetPointer);
         core.fqnHandler.copy(sourcePointer, targetPointer);
         core.footprint.copy(sourcePointer, targetPointer);
         this._depot.addProxy(source, target, false);

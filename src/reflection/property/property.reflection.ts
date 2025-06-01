@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import {$assert, $dev, $repo, Dict, Func} from "@leyyo/common";
+import {$assert, $dev, Dict, Func} from "@leyyo/common";
 import {AbstractReflection} from "../abstract";
 import {ParameterReflection, ParameterReflectionLike} from "../parameter";
 import {
@@ -25,92 +25,102 @@ import {FQN_PCK} from "../internal";
 // noinspection Annotator
 export class PropertyReflection extends AbstractReflection implements PropertyReflectionLike, PropertyReflectionSecure {
     // region properties
-    protected readonly _clazz: ClassReflectionLike;
-    protected _callable: Func;
-    protected readonly _parameters: Array<ParameterReflectionLike>;
-    protected readonly _keyword: DecoKeyword;
-    protected readonly _kind: DecoKind;
-    protected readonly _proto: PropertyReflectionLike;
-    protected _inspected: FootprintInspected;
-    protected _description: string;
+    private _clazz: ClassReflectionLike;
+    private _callable: Func;
+    private _parameters: Array<ParameterReflectionLike> = [];
+    private _keyword: DecoKeyword;
+    private _kind: DecoKind;
+    private _proto: PropertyReflectionLike;
+    private _clones: Array<PropertyReflectionLike>;
+    private _inspected: FootprintInspected;
+    private _description: string;
     // endregion properties
     // region methods
-    constructor(clazz: ClassReflectionLike, name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func, clone?: boolean) {
-        super(clazz.code, name, keyword, kind);
-        this._clazz = clazz;
-        this._name = name as string;
-        this._keyword = keyword;
+    static create(clazz: ClassReflectionLike, name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func): PropertyReflection {
+        const ins = new PropertyReflection(clazz.code, name as string, keyword, kind);
+        ins._clazz = clazz;
+        ins._name = name as string;
+        ins._keyword = keyword;
         if (kind === 'method') {
-            this._parameters = $repo.newArray(FQN_PCK, this._code, 'parameters');
-            this._kind = kind;
-            this._callable = typeof callable === 'function' ? callable : null;
-            this._target = 'method';
+            ins._parameters = [];
+            ins._kind = kind;
+            ins._callable = typeof callable === 'function' ? callable : null;
+            ins._target = 'method';
             let paramsListed = false;
-            if (this._clazz.body) {
-                if (!this._callable) {
-                    this._callable = this._clazz.body[this._name];
+            if (ins._clazz.body) {
+                if (!ins._callable) {
+                    ins._callable = ins._clazz.body[ins._name];
                 }
-                this._type = Reflect.getMetadata('design:returntype', this._clazz.body, this._name as string) as Func;
-                const params = Reflect.getMetadata('design:paramtypes', this._clazz.body, this._name as string) as Array<Func>;
+                ins._type = Reflect.getMetadata('design:returntype', ins._clazz.body, ins._name as string) as Func;
+                const params = Reflect.getMetadata('design:paramtypes', ins._clazz.body, ins._name as string) as Array<Func>;
                 if (Array.isArray(params)) {
                     paramsListed = true;
-                    params.forEach((param, i) => {
-                        this._parameters.push(new ParameterReflection(this, i, param));
-                    });
-                }
-            } else if (this._clazz.creator[this._name]) {
-                if (!this._callable) {
-                    this._callable = this._clazz.creator[this._name];
-                }
-                this._type = Reflect.getMetadata('design:returntype', this._clazz.creator, this._name as string) as Func;
-                const params = Reflect.getMetadata('design:paramtypes', this._clazz.creator, this._name as string) as Array<Func>;
-                if (Array.isArray(params)) {
-                    paramsListed = true;
-                    params.forEach((param, i) => {
-                        this._parameters.push(new ParameterReflection(this, i, param));
+                    params.forEach((type, i) => {
+                        ins.$secure.$createParameter(i,  type);
                     });
                 }
             }
-            if (!paramsListed && this._callable) {
-                for (let i = 0; i < this._callable.length; i++) {
-                    this._parameters.push(new ParameterReflection(this, i, null));
+            else if (ins._clazz.creator[ins._name]) {
+                if (!ins._callable) {
+                    ins._callable = ins._clazz.creator[ins._name];
+                }
+                ins._type = Reflect.getMetadata('design:returntype', ins._clazz.creator, ins._name as string) as Func;
+                const params = Reflect.getMetadata('design:paramtypes', ins._clazz.creator, ins._name as string) as Array<Func>;
+                if (Array.isArray(params)) {
+                    paramsListed = true;
+                    params.forEach((type, i) => {
+                        ins.$secure.$createParameter(i,  type);
+                    });
                 }
             }
-        } else {
-            this._kind = 'field';
-            this._callable = null;
-            this._target = 'field';
-            if (this._clazz.body) {
-                this._type = Reflect.getMetadata('design:type', this._clazz.body, this._name as string) as Func;
+            if (!paramsListed && ins._callable) {
+                for (let i = 0; i < ins._callable.length; i++) {
+                    ins.$secure.$createParameter(i,  undefined);
+                }
+            }
+        }
+        else {
+            ins._kind = 'field';
+            ins._callable = undefined;
+            ins._target = 'field';
+            if (ins._clazz.body) {
+                ins._type = Reflect.getMetadata('design:type', ins._clazz.body, ins._name as string) as Func;
             } else {
-                this._type = Reflect.getMetadata('design:type', this._clazz.creator, this._name as string) as Func;
+                ins._type = Reflect.getMetadata('design:type', ins._clazz.creator, ins._name as string) as Func;
             }
         }
-        if (this._clazz?.parent) {
-            this._proto = (this._keyword === 'instance') ? this._clazz.parent.getInstanceProperty(name) : this._clazz.parent.getStaticProperty(name);
-            if (this._proto) {
-                const oldDocs = this._proto.docsAll();
+        if (ins._clazz?.parent) {
+            ins._proto = (ins._keyword === 'instance') ? ins._clazz.parent.getInstanceProperty(name) : ins._clazz.parent.getStaticProperty(name);
+            if (ins._proto) {
+                const oldDocs = ins._proto.docsAll();
                 if (oldDocs.length > 0) {
-                    if (clone) {
-                        oldDocs.forEach(doc => {
-                            const newDeco = {value: doc.value} as DecoDoc;
-                            if (this._kind === 'field') {
-                                const fieldArgs = doc.ins.arguments as DecoArgumentField;
-                                newDeco.ins = doc.ins.copy(this, [fieldArgs[0], this._name]);
-                            } else {
-                                const methodArgs = doc.ins.arguments as DecoArgumentMethod;
-                                newDeco.ins = doc.ins.copy(this, [methodArgs[0], this._name, methodArgs[2]]);
-                            }
-                            this.setValue(newDeco.ins, newDeco);
-                        });
-                    } else {
-                        oldDocs.forEach(doc => {
-                            this.setValue(doc.ins, doc);
-                        });
-                    }
+                    oldDocs.forEach(doc => {
+                        ins.setValue(doc.ins, doc);
+                    });
                 }
             }
         }
+        return ins;
+    }
+    static copy(clazz: ClassReflectionLike, source: PropertyReflectionLike): PropertyReflection {
+        const ins = new PropertyReflection(clazz.code, source.name, source.keyword, source.kind);
+        ins._clazz = clazz;
+        ins._name = source.name;
+        ins._keyword = source.keyword;
+        ins._kind = source.kind;
+        ins._callable = source.callable;
+        ins._target = source.target;
+        ins._type = source.type;
+        ins._proto = source.proto;
+        if (ins._kind === 'method') {
+            ins._parameters = [];
+            source.listParameters().forEach(param => {
+                ins._parameters.push(ParameterReflection.copy(ins, param));
+            });
+        }
+        ins.copyDecorators(source);
+        source.$secure.$appendCopied(ins);
+        return ins;
     }
 
     // endregion methods
@@ -149,6 +159,9 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
 
     get clazz(): ClassReflectionLike {
         return this._clazz;
+    }
+    get clones(): Array<PropertyReflectionLike> {
+        return this._clones ? [...this._clones] : [];
     }
 
     get proto(): PropertyReflectionLike {
@@ -248,7 +261,7 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
 
     // endregion filter-by
 
-    copyDecorators(source: PropertyReflectionLike, args: DecoArgumentField | DecoArgumentMethod): void {
+    copyDecorators(source: PropertyReflectionLike): void {
         if (source.keyword !== this._keyword) {
             throw $dev.developerError({
                 issue: 'keywords should be same',
@@ -269,7 +282,7 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
                 where: 'leyyo.reflection.PropertyReflection'
             });
         }
-        this._copyDecorators(source, this, args);
+        this._copyDecorators(source, this);
     }
 
     // region secure
@@ -281,6 +294,45 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
         return this;
     }
 
+    $copyParameter(source: ParameterReflectionLike): ParameterReflectionLike {
+        const param = ParameterReflection.copy(this, source);
+        this._parameters.push(param);
+        return param;
+    }
+    $createParameter(index: number, type: Func): ParameterReflectionLike {
+        const param = ParameterReflection.create(this, index, type);
+        this._parameters.push(param);
+        return param;
+    }
+    $setProto(proto: PropertyReflectionLike): this {
+        $assert.instanceOf(proto, PropertyReflection, () => $dev.opt({
+            name: this.description,
+            field: 'proto',
+            method: '$setProto',
+            where: 'leyyo.reflection.PropertyReflection'
+        }));
+        if (proto === this) {
+            $dev.developerError2(FQN_PCK, 100, {
+                message: 'Circular proto assignment',
+                name: this.description
+            });
+        }
+        if (this._proto && this._proto !== proto) {
+            let index = 0;
+            while (this.hasMetaKey(`$proto-${index}`)) {
+                index++;
+            }
+            this.setMetaKey(`$proto-${index}`, this._proto);
+        }
+        this._proto = proto;
+        return this;
+    }
+    $appendCopied(child: PropertyReflectionLike): void {
+        if (!this._clones) {
+            this._clones = [];
+        }
+        this._clones.push(child);
+    }
     $setType(type: Func): this {
         $assert.func(type, () => $dev.opt({
             name: this.description,

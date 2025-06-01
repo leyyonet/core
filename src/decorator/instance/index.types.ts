@@ -12,7 +12,7 @@ import {DecoCloneLike} from "../clone";
 export interface DecoInstanceLike<V = Dict, M = Dict, P = V> {
 
     // region getters
-    copy(assigned: CoreReflectionLike, args: DecoArguments): DecoInstanceLike<V, M, P>;
+    copySelf(assigned: CoreReflectionLike): DecoInstanceLike<V, M, P>;
     get isCopied(): boolean;
     get description(): string;
 
@@ -92,8 +92,9 @@ export type DecoArgumentParam = [Obj | Func, PropertyKey, number];
 
 export interface DecoDoc<V = Dict> {
     ins: DecoInstanceLike<V>;
-    inherited?: boolean;
     value: V;
+    inherited?: boolean;
+    copied?: boolean;
 }
 
 export interface DecoDocExtended<V = Dict, M = Dict> {

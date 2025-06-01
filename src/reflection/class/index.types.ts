@@ -61,12 +61,16 @@ export interface ClassReflectionLike extends CoreReflectionLike, ShiftSecure<Cla
 
     // endregion any-properties
 
-    copyDecorators(source: ClassReflectionLike, args: DecoArgumentClass): void;
+    copyDecorators(source: ClassReflectionLike): void;
 }
 
 export interface ClassReflectionSecure extends CoreReflectionLike, ShiftMain<ClassReflectionLike> {
-    $registerProperty(name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func, clone?: boolean): PropertyReflectionLike;
+    $copyInstanceProperties(source: ClassReflectionLike, mixin?: CopyPropertyMixin, keys?: Array<string>): Array<string>;
+    $copyStaticProperties(source: ClassReflectionLike, mixin?: CopyPropertyMixin, keys?: Array<string>): Array<string>;
+    $copyProperty(source: PropertyReflectionLike): PropertyReflectionLike;
+    $createProperty(name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func): PropertyReflectionLike;
 
     $clearValues(type: DecoCLearType, ...decorators: Array<Func | DecoLike | string>): this;
 }
 export type ClassReflectionCopyLambda = (ref: ClassReflectionLike) => void;
+export type CopyPropertyMixin = 'pick'|'omit';

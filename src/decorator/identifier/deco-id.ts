@@ -357,7 +357,7 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
 
     // region public
     fork(...args: Array<unknown>): DecoInstanceLike<V, M, P> {
-        return new DecoInstance<V, M, P>(this, null, args);
+        return DecoInstance.create<V, M, P>(this, null, args);
     }
 
     // endregion public

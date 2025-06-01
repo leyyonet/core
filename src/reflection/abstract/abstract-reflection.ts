@@ -41,7 +41,7 @@ export abstract class AbstractReflection implements CoreReflectionLike {
     private _hasSelf: boolean;
 
     // endregion properties
-    protected constructor(...args: Array<any>) {
+    protected constructor(...args: Array<string|number>) {
         this._code = args.join('.');
     }
 
@@ -168,18 +168,10 @@ export abstract class AbstractReflection implements CoreReflectionLike {
 
     // region decorator
 
-    protected _copyDecorators(source: CoreReflectionLike, target: CoreReflectionLike, args: DecoArguments): void {
+    protected _copyDecorators(source: CoreReflectionLike, target: CoreReflectionLike): void {
         source.docsAll().forEach(doc => {
-            if (doc.ins.identifier.hasRule('no-copy')) {
-                return;
-            }
             try {
-                if (doc.inherited) {
-                    target.setValue(doc.ins, doc.value);
-                }
-                else {
-                    target.setValue(doc.ins.copy(target, args), doc.value);
-                }
+                target.copyValue(doc.ins, doc.value);
             } catch (_e) {
             }
         });
@@ -224,21 +216,23 @@ export abstract class AbstractReflection implements CoreReflectionLike {
             this._docs.splice(0, this._docs.length);
         }
     }
-    setValue<V extends Dict>(ins: DecoInstanceLike, value: V): this {
+    private _appendValue<V extends Dict>(ins: DecoInstanceLike, value: V, inherited: boolean, copied: boolean): void {
         const id = ins.identifier;
-        $assert.bareObject(value, () => $dev.desc(ins, {field: 'value'}));
-
-        const inherited = (ins.assigned === this) ? undefined : true;
         // ignore if inherited value
         if (id.hasRule('no-inherited') && inherited) {
-            return this;
+            return;
         }
+        if (id.hasRule('no-copy') && copied) {
+            return;
+        }
+
+        $assert.bareObject(value, () => $dev.desc(ins, {field: 'value'}));
         const found = this._docs ? this._docs.filter(doc => doc.ins.identifier === id) : [];
         let refreshDecorators = true;
         // more docs for one deco
         if (found.length > 0) {
             if (id.hasRule('ignore-if-exists') && !id.hasRule('iterable')) {
-                return this;
+                return;
             }
             if (id.hasRule('no-multiple') && ins !== found[0].ins) {
                 throw $dev.developerError2(FQN_PCK, 121, {issue: 'Decorator does not allow multiple value for same target', desc: found[0].ins.description});
@@ -267,15 +261,36 @@ export abstract class AbstractReflection implements CoreReflectionLike {
                 (selected[0].value as Arr).push(...arr);
             } else {
                 this._createDocs();
-                this._docs.push({ins, inherited, value: arr});
+                const doc = {ins, value: arr} as DecoDoc;
+                if (inherited) {
+                    doc.inherited = true;
+                }
+                if (copied) {
+                    doc.copied = true;
+                }
+                this._docs.push(doc);
             }
         } else {
             this._createDocs();
-            this._docs.push({ins, inherited, value: cloned});
+            const doc = {ins, value: cloned} as DecoDoc;
+            if (inherited) {
+                doc.inherited = true;
+            }
+            if (copied) {
+                doc.copied = true;
+            }
+            this._docs.push(doc);
         }
         if (refreshDecorators) {
             this._refreshDecorators();
         }
+    }
+    copyValue<V extends Dict>(ins: DecoInstanceLike, value: V): this {
+        this._appendValue(ins, value, true, true);
+        return this;
+    }
+    setValue<V extends Dict>(ins: DecoInstanceLike, value: V): this {
+        this._appendValue(ins, value, (ins.assigned === this), false);
         return this;
     }
 

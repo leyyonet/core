@@ -11,34 +11,54 @@ import {DecoArgumentParam} from "../../decorator";
 // noinspection Annotator
 export class ParameterReflection extends AbstractReflection implements ParameterReflectionLike, ParameterReflectionSecure {
     // region properties
-    protected readonly _property: PropertyReflectionLike;
-    protected readonly _index: number;
-    protected readonly _hasDefault: boolean = false;
-    protected readonly _isVariadic: boolean = false;
-    protected _description: string;
+    private _property: PropertyReflectionLike;
+    private _proto: ParameterReflectionLike;
+    private _index: number;
+    private _hasDefault: boolean = false;
+    private _isVariadic: boolean = false;
+    private _description: string;
+    private _clones: Array<ParameterReflectionLike>;
 
     // endregion properties
 
-    constructor(property: PropertyReflectionLike, index: number, type: Func) {
-        super(property.code, index);
-        this._target = 'parameter';
-        this._property = property;
-        this._index = index;
-        this._type = typeof type === 'function' ? type : null;
+    static create(property: PropertyReflectionLike, index: number, type: Func): ParameterReflection {
+        const ins = new ParameterReflection(property.code, index);
+        ins._target = 'parameter';
+        ins._property = property;
+
+        ins._index = index;
+        ins._type = typeof type === 'function' ? type : undefined;
 
         if (property.inspected?.params && property.inspected?.params[index]) {
             const param = property.inspected.params[index];
             if (Array.isArray(param)) {
-                this._name = param[0];
+                ins._name = param[0];
                 if (param[1] === 'default') {
-                    this._hasDefault = true;
+                    ins._hasDefault = true;
                 } else if (param[1] === 'variadic') {
-                    this._isVariadic = true;
+                    ins._isVariadic = true;
                 }
             } else {
-                this._name = param;
+                ins._name = param;
             }
         }
+        return ins;
+    }
+    static copy(property: PropertyReflectionLike, source: ParameterReflectionLike): ParameterReflection {
+        const ins = new ParameterReflection(source.code);
+        ins._target = source.target;
+        ins._property = property;
+
+        ins._index = source.index;
+        ins._type = source.type;
+        ins._name = source.name;
+        ins._hasDefault = source.hasDefault;
+        ins._isVariadic = source.isVariadic;
+
+        ins.copyDecorators(source);
+        source.$secure.$appendCopied(ins);
+        return ins;
+
     }
 
     // region getters
@@ -62,6 +82,15 @@ export class ParameterReflection extends AbstractReflection implements Parameter
     get property(): PropertyReflectionLike {
         return this._property;
     }
+    get proto(): ParameterReflectionLike {
+        return this._proto;
+    }
+    get hasProto(): boolean {
+        return !!this._proto;
+    }
+    get clones(): Array<ParameterReflectionLike> {
+        return this._clones ? [...this._clones] : [];
+    }
 
     get index(): number {
         return this._index;
@@ -84,8 +113,8 @@ export class ParameterReflection extends AbstractReflection implements Parameter
 
     // endregion getters
 
-    copyDecorators(source: ParameterReflectionLike, args: DecoArgumentParam): void {
-        this._copyDecorators(source, this, args);
+    copyDecorators(source: ParameterReflectionLike): void {
+        this._copyDecorators(source, this);
     }
     // region secure
     get $back(): ParameterReflectionLike {
@@ -96,12 +125,13 @@ export class ParameterReflection extends AbstractReflection implements Parameter
         return this;
     }
 
+    $appendCopied(child: ParameterReflectionLike): void {
+        if (!this._clones) {
+            this._clones = [];
+        }
+        this._clones.push(child);
+    }
     $setType(type: Func): this {
-        $assert.func(type, () => $dev.opt({
-            field: 'type',
-            name: this.description,
-            where: 'leyyo.reflection.ParameterReflection'
-        }));
         if (this._type && this._type !== type) {
             let index = 0;
             while (this.hasMetaKey(`$type-${index}`)) {

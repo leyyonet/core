@@ -27,6 +27,8 @@ export interface PropertyReflectionLike extends CoreReflectionLike, ShiftSecure<
      * */
     get clazz(): ClassReflectionLike;
 
+    get clones(): Array<PropertyReflectionLike>;
+
     /**
      * Returns inherited property reflection if it's class extends another class
      * */
@@ -112,11 +114,15 @@ export interface PropertyReflectionLike extends CoreReflectionLike, ShiftSecure<
 
     // endregion filter-by
 
-    copyDecorators(source: PropertyReflectionLike, args: DecoArgumentField | DecoArgumentMethod): void;
+    copyDecorators(source: PropertyReflectionLike): void;
 }
 
 export interface PropertyReflectionSecure extends ShiftMain<PropertyReflectionLike> {
+    $appendCopied(child: PropertyReflectionLike): void;
     $setType(type: Func): this;
+    $setProto(proto: PropertyReflectionLike): this;
+    $copyParameter(source: ParameterReflectionLike): ParameterReflectionLike;
+    $createParameter(index: number, type: Func): ParameterReflectionLike;
 
     $setCallable(callable: Func): this;
 

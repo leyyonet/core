@@ -5,7 +5,7 @@ import {
     $fqn,
     $hook,
     $is,
-    $log,
+    $log, $name,
     $sys,
     Arr,
     ClassLike,
@@ -183,7 +183,7 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
         }
         try {
             inspected.name = name;
-            core.nameHandler.set(fn as Func, name);
+            $name.set(fn as Func, name);
 
             core.footprint.$secure.$save(fn, inspected);
         } catch (e) {

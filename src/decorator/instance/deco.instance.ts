@@ -16,205 +16,204 @@ import {FQN_PCK} from "../internal";
 
 
 export class DecoInstance<V = Dict, M = Dict, P = V> implements DecoInstanceLike<V, M, P> {
-    private readonly _isCopied: boolean;
-    private readonly _identifier: DecoIdLike<V, M, P>;
-    private readonly _clone: DecoCloneLike<V, M, P>;
-    private readonly _target: Target;
+    private _isCopied: boolean;
+    private _identifier: DecoIdLike<V, M, P>;
+    private _clone: DecoCloneLike<V, M, P>;
+    private _target: Target;
     private _assigned: CoreReflectionLike;
     private _arguments: DecoArguments;
     private _description: string;
     private _code: string;
 
-    constructor(identifier: DecoIdLike<V, M, P>, clone: DecoCloneLike<V, M, P>, args: Array<unknown>, copied?: DecoInstanceLike<V, M, P>) {
-        if (identifier === undefined && clone === undefined && args === undefined && copied instanceof DecoInstance) {
-            this._isCopied = true;
-            this._identifier = copied._identifier;
-            this._clone = copied._clone;
-            this._target = copied._target;
+    protected constructor() {
+
+    }
+    static copy<V = Dict, M = Dict, P = V>(source: DecoInstance<V, M, P>, assigned: CoreReflectionLike): DecoInstance<V, M, P> {
+        const ins = new DecoInstance<V, M, P>();
+        ins._isCopied = true;
+        ins._identifier = source.identifier;
+        ins._clone = source.clone;
+        ins._target = source.target;
+        ins._arguments = source.arguments;
+        ins._assigned = assigned;
+        return ins;
+    }
+
+    static create<V = Dict, M = Dict, P = V>(identifier: DecoIdLike<V, M, P>, clone: DecoCloneLike<V, M, P>, args: Array<unknown>): DecoInstance<V, M, P> {
+        const ins = new DecoInstance<V, M, P>();
+        ins._identifier = identifier;
+        ins._clone = clone;
+        identifier.addInstance(ins as DecoInstanceLike);
+
+
+        let keyword: DecoKeyword;
+        let classFn: ClassLike = null;
+        let prototype: Obj = null;
+        let memberName: PropertyKey = null;
+        let methodFn: Func = null;
+        let descriptor: PropertyDescriptor;
+        let index: number;
+        // let isGetter: boolean;
+        // let isSetter: boolean;
+        const targetObj = args[0] as Obj | Func;
+        const type = typeof targetObj;
+        if (type === 'function') {
+            keyword = 'static';
+            classFn = targetObj as ClassLike;
+            prototype = classFn.prototype as Obj;
+        } else if (type === 'object' && targetObj && targetObj.constructor) {
+            keyword = 'instance';
+            classFn = targetObj.constructor as ClassLike;
+            prototype = targetObj as Obj;
+        } else {
+            throw $dev.invalidError({
+                issue: 'not.evaluated.target',
+                where: 'leyyo.decorator.DecoInstance',
+                type: type,
+                value: targetObj
+            });
         }
-        else {
-            this._isCopied = false;
-            let keyword: DecoKeyword;
-            let classFn: ClassLike = null;
-            let prototype: Obj = null;
-            let memberName: PropertyKey = null;
-            let methodFn: Func = null;
-            let descriptor: PropertyDescriptor;
-            let index: number;
-            // let isGetter: boolean;
-            // let isSetter: boolean;
-            this._identifier = identifier;
-            this._clone = clone;
-            identifier.addInstance(this as DecoInstanceLike);
-            const targetObj = args[0] as Obj | Func;
-            const type = typeof targetObj;
-            if (type === 'function') {
-                keyword = 'static';
-                classFn = targetObj as ClassLike;
-                prototype = classFn.prototype as Obj;
-            } else if (type === 'object' && targetObj && targetObj.constructor) {
-                keyword = 'instance';
-                classFn = targetObj.constructor as ClassLike;
-                prototype = targetObj as Obj;
-            } else {
-                throw $dev.invalidError({
-                    issue: 'not.evaluated.target',
+        let forField: boolean;
+        // if (typeof FNC !== 'function') {throw new Error('UnknownTargetError');}
+
+        // console.info(decoratorName, args);
+        if (!args[1]) {
+            ins._target = 'class';
+            if (!(clone ?? identifier).hasTarget('class')) {
+                throw $dev.developerError({
+                    issue: 'not.allowed.target',
                     where: 'leyyo.decorator.DecoInstance',
-                    type: type,
-                    value: targetObj
+                    target: ins._target,
+                    clazz: classFn?.name
                 });
             }
-            let forField: boolean;
-            // if (typeof FNC !== 'function') {throw new Error('UnknownTargetError');}
-
-            // console.info(decoratorName, args);
-            if (!args[1]) {
-                this._target = 'class';
-                if (!(clone ?? identifier).hasTarget('class')) {
+            ins._arguments = [targetObj];
+        }
+        else {
+            memberName = args[1] as PropertyKey;
+            if (!memberName) {
+                throw $dev.invalidError({
+                    issue: 'member.name.empty',
+                    where: 'leyyo.decorator.DecoInstance',
+                    target: ins._target,
+                    clazz: classFn?.name,
+                    member: args[1],
+                    index: args[2]
+                });
+            }
+            if (typeof args[2] === 'number') { // if 3rd argument is number then its index so its parameter decorator
+                index = args[2];
+                ins._target = 'parameter';
+                if (!(clone ?? identifier).hasTarget('parameter')) {
                     throw $dev.developerError({
                         issue: 'not.allowed.target',
                         where: 'leyyo.decorator.DecoInstance',
-                        target: this._target,
-                        clazz: classFn?.name
-                    });
-                }
-                this._arguments = [targetObj];
-            } else {
-                memberName = args[1] as PropertyKey;
-                if (!memberName) {
-                    throw $dev.invalidError({
-                        issue: 'member.name.empty',
-                        where: 'leyyo.decorator.DecoInstance',
-                        target: this._target,
+                        target: ins._target,
                         clazz: classFn?.name,
-                        member: args[1],
-                        index: args[2]
+                        member: memberName,
+                        index
                     });
                 }
-                if (typeof args[2] === 'number') { // if 3rd argument is number then its index so its parameter decorator
-                    index = args[2];
-                    this._target = 'parameter';
-                    if (!(clone ?? identifier).hasTarget('parameter')) {
+                ins._arguments = [targetObj, memberName, index];
+            }
+            else if (args[2]) {
+                descriptor = args[2] as TypedPropertyDescriptor<any>;
+                if (typeof descriptor.value === 'function') { // method decorator
+                    ins._target = 'method';
+                    methodFn = (args[2] as PropertyDescriptor).value; // method function
+                    if (!(clone ?? identifier).hasTarget('method')) {
                         throw $dev.developerError({
                             issue: 'not.allowed.target',
                             where: 'leyyo.decorator.DecoInstance',
-                            target: this._target,
+                            target: ins._target,
                             clazz: classFn?.name,
-                            member: memberName,
-                            index
+                            member: args[1]
                         });
                     }
-                    this._arguments = [targetObj, memberName, index];
-                } else if (args[2]) {
-                    descriptor = args[2] as TypedPropertyDescriptor<any>;
-                    if (typeof descriptor.value === 'function') { // method decorator
-                        this._target = 'method';
-                        methodFn = (args[2] as PropertyDescriptor).value; // method function
-                        if (!(clone ?? identifier).hasTarget('method')) {
-                            throw $dev.developerError({
-                                issue: 'not.allowed.target',
-                                where: 'leyyo.decorator.DecoInstance',
-                                target: this._target,
-                                clazz: classFn?.name,
-                                member: args[1]
-                            });
-                        }
-                        this._arguments = [targetObj, memberName, descriptor];
-                    } else {
-                        forField = true;
-                        // if (typeof descriptor.get === 'function') {
-                        //     isGetter = true;
-                        // }
-                        // if (typeof descriptor.set === 'function') {
-                        //     isSetter = true;
-                        // }
-                    }
-                } else { // field decorator, it can be 3rd arg is undefined
+                    ins._arguments = [targetObj, memberName, descriptor];
+                }
+                else {
                     forField = true;
+                    // if (typeof descriptor.get === 'function') {
+                    //     isGetter = true;
+                    // }
+                    // if (typeof descriptor.set === 'function') {
+                    //     isSetter = true;
+                    // }
                 }
             }
-            if (forField) {
-                if (!(clone ?? identifier).hasTarget('field')) {
-                    throw $dev.developerError({
-                        issue: 'not.allowed.target',
-                        where: 'leyyo.decorator.DecoInstance',
-                        target: this._target,
-                        clazz: classFn?.name,
-                        member: args[1]
-                    });
-                }
-                // if (!descriptor) {
-                //     if (keyword === 'static') {
-                //         descriptor = Object.getOwnPropertyDescriptor(classFn, keyword);
-                //     } else {
-                //         descriptor = Object.getOwnPropertyDescriptor(prototype, keyword);
-                //     }
-                // }
-                // if (typeof descriptor?.get === 'function') {
-                //     isGetter = true;
-                // }
-                // if (typeof descriptor?.set === 'function') {
-                //     isSetter = true;
-                // }
-                this._target = 'field';
-                this._arguments = [targetObj, memberName];
-
-            }
-            // todo system class
-            if ((['method', 'field'] as Array<Target>).includes(this._target)) {
-                if (keyword === 'static' && identifier.hasRule('no-static')) {
-                    throw $dev.developerError({
-                        issue: 'not.used.for.static.member',
-                        where: 'leyyo.decorator.DecoInstance',
-                        target: this._target,
-                        clazz: classFn?.name,
-                        member: args[1]
-                    });
-                } else if (keyword === 'instance' && identifier.hasRule('no-instance')) {
-                    throw $dev.developerError({
-                        issue: 'not.used.for.instance.member',
-                        where: 'leyyo.decorator.DecoInstance',
-                        target: this._target,
-                        clazz: classFn?.name,
-                        member: args[1]
-                    });
-                }
-            }
-
-            const assigned = core.reflectionPool.registerClass(classFn, prototype);
-            switch (this._target) {
-                case 'class':
-                    this._assigned = assigned;
-                    break;
-                case 'method':
-                    this._assigned = assigned.$secure.$registerProperty(memberName, keyword, 'method', methodFn);
-                    break;
-                case 'field':
-                    this._assigned = assigned.$secure.$registerProperty(memberName, keyword, 'field');
-                    break;
-                case 'parameter':
-                    this._assigned = assigned.$secure.$registerProperty(memberName, keyword, 'method', methodFn).getParameter(index);
-                    break;
-            }
-
-            if (identifier.hasRule('no-multiple')) {
-                const found = this._assigned.docsAll().filter(doc => doc.ins.identifier === identifier);
-                if (found.length > 0) {
-                    throw $dev.developerError2(FQN_PCK, 120, {issue: 'Decorator does not allow multiple value for same target', desc: this.description});
-                }
+            else { // field decorator, it can be 3rd arg is undefined
+                forField = true;
             }
         }
+        if (forField) {
+            if (!(clone ?? identifier).hasTarget('field')) {
+                throw $dev.developerError({
+                    issue: 'not.allowed.target',
+                    where: 'leyyo.decorator.DecoInstance',
+                    target: ins._target,
+                    clazz: classFn?.name,
+                    member: args[1]
+                });
+            }
+            ins._target = 'field';
+            ins._arguments = [targetObj, memberName];
+
+        }
+        // todo system class
+        if ((['method', 'field'] as Array<Target>).includes(ins._target)) {
+            if (keyword === 'static' && identifier.hasRule('no-static')) {
+                throw $dev.developerError({
+                    issue: 'not.used.for.static.member',
+                    where: 'leyyo.decorator.DecoInstance',
+                    target: ins._target,
+                    clazz: classFn?.name,
+                    member: args[1]
+                });
+            }
+            else if (keyword === 'instance' && identifier.hasRule('no-instance')) {
+                throw $dev.developerError({
+                    issue: 'not.used.for.instance.member',
+                    where: 'leyyo.decorator.DecoInstance',
+                    target: ins._target,
+                    clazz: classFn?.name,
+                    member: args[1]
+                });
+            }
+        }
+
+        const assigned = core.reflectionPool.registerClass(classFn, prototype);
+        switch (ins._target) {
+            case 'class':
+                ins._assigned = assigned;
+                break;
+            case 'method':
+                ins._assigned = assigned.$secure.$createProperty(memberName, keyword, 'method', methodFn);
+                break;
+            case 'field':
+                ins._assigned = assigned.$secure.$createProperty(memberName, keyword, 'field');
+                break;
+            case 'parameter':
+                ins._assigned = assigned.$secure.$createProperty(memberName, keyword, 'method', methodFn).getParameter(index);
+                break;
+        }
+
+        if (identifier.hasRule('no-multiple')) {
+            const found = ins._assigned.docsAll().filter(doc => doc.ins.identifier === identifier);
+            if (found.length > 0) {
+                throw $dev.developerError2(FQN_PCK, 120, {issue: 'Decorator does not allow multiple value for same target', desc: ins.description});
+            }
+        }
+        return ins;
     }
 
     // region getters
     get isCopied(): boolean {
         return this._isCopied;
     }
-    copy(assigned: CoreReflectionLike, args: DecoArguments): DecoInstanceLike<V, M, P> {
-        const copied = new DecoInstance<V, M, P>(undefined, undefined, undefined, this);
-        copied._assigned = assigned;
-        copied._arguments = args;
-        return copied;
+
+    copySelf(assigned: CoreReflectionLike): DecoInstanceLike<V, M, P> {
+        return DecoInstance.copy<V, M, P>(this, assigned);
     }
     get description(): string {
         if (!this._description) {

@@ -9,7 +9,6 @@ import {$$coreLifecycleInternal} from "../lifecycle/internal.loader";
 import {$$coreNamedInternal} from "../named/internal.loader";
 import {$$coreProxyInternal} from "../proxy/internal.loader";
 import {$$coreReflectionInternal} from "../reflection/internal.loader";
-import {$$coreNameInternal} from "../name/internal.loader";
 import {$$coreInternalComplete, $$coreInternalRun} from "./callbacks";
 
 // noinspection JSUnusedGlobalSymbols
@@ -24,7 +23,6 @@ const items: Arr = [
     ...$$coreNamedInternal,
     ...$$coreProxyInternal,
     ...$$coreReflectionInternal,
-    ...$$coreNameInternal,
 ];
 $$coreInternalRun('class-pool-1');
 $$coreInternalRun('class-pool-2');

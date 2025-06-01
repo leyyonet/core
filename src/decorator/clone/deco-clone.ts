@@ -206,7 +206,7 @@ export class DecoClone<V = Dict, M = Dict, P = V> implements DecoCloneLike<V, M,
     fork(...args: Array<unknown>): DecoInstanceLike<V, M, P> {
         this._dirty = true;
         this._id.dirty();
-        return new DecoInstance<V, M, P>(this._id, this, args);
+        return DecoInstance.create<V, M, P>(this._id, this, args);
     }
 
 

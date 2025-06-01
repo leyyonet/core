@@ -8,7 +8,6 @@ import {EnumPoolLike} from "../enum";
 import {ProxyHandlerLike} from "../proxy";
 import {BindHandlerLike} from "../bind";
 import {LifecycleLike} from "../lifecycle";
-import {NameHandlerLike} from "../name";
 import {$$coreInternalOn} from "../internal";
 import {FQN_PCK} from "./internal";
 
@@ -112,20 +111,6 @@ class Core implements CoreLike, CoreSecure {
     }
 
     // endregion proxy-handler
-
-    // region name-handler
-    private _nameHandler: NameHandlerLike;
-
-    $setNameHandler(ins: NameHandlerLike): CoreSecure {
-        this._nameHandler = ins;
-        return this;
-    }
-
-    get nameHandler(): NameHandlerLike {
-        return this._nameHandler;
-    }
-
-    // endregion name-handler
 
     // region bind-handler
     private _bindHandler: BindHandlerLike;

@@ -1,12 +1,26 @@
-import {$descriptor, $dev, $repo, $sys, ClassLike, Dict, Fnc, Func, Obj} from "@leyyo/common";
+import {
+    $assert,
+    $descriptor,
+    $dev,
+    $is, $name,
+    $repo,
+    $sys,
+    ClassLike,
+    Dict,
+    Fnc,
+    Func,
+    Obj,
+    PropDescriptor
+} from "@leyyo/common";
 import {AbstractReflection} from "../abstract";
 import {PropertyReflection, PropertyReflectionLike} from "../property";
 import {DecoArgumentClass, DecoFilter, DecoFilterKind, DecoKeyword, DecoKind} from "../../decorator";
-import {ClassReflectionCopyLambda, ClassReflectionLike, ClassReflectionSecure} from "./index.types";
+import {ClassReflectionCopyLambda, ClassReflectionLike, ClassReflectionSecure, CopyPropertyMixin} from "./index.types";
 import {core} from "../../core";
 import {FootprintInspected} from "../../footprint";
 import {$$coreInternalOn} from "../../internal";
 import {FQN_PCK} from "../internal";
+import {footprint} from "../../index";
 
 
 // noinspection Annotator
@@ -64,7 +78,7 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
                         kind = 'field';
                         callable = undefined;
                     }
-                    this.$registerProperty(key, 'instance', kind, callable);
+                    this.$createProperty(key, 'instance', kind, callable);
                 }
             });
         }
@@ -89,7 +103,7 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
                             kind = 'field';
                             callable = undefined;
                         }
-                        this.$registerProperty(key, 'static', kind, callable);
+                        this.$createProperty(key, 'static', kind, callable);
                     }
                 }
             });
@@ -275,8 +289,8 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
 
     // endregion any-properties
 
-    copyDecorators(source: ClassReflectionLike, args: DecoArgumentClass): void {
-        this._copyDecorators(source, this, args);
+    copyDecorators(source: ClassReflectionLike): void {
+        this._copyDecorators(source, this);
     }
     // region secure
 
@@ -288,17 +302,145 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
         return this;
     }
 
-    $registerProperty(name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func, clone?: boolean): PropertyReflectionLike {
+    $copyInstanceProperties(source: ClassReflectionLike, mixin?: CopyPropertyMixin, keys?: Array<string>): Array<string> {
+        const affectedKeys = [] as Array<string>;
+        const selfPrototype = this.creator.prototype;
+        const sourcePrototype = source.creator.prototype;
+        if (!$is.object(selfPrototype) || !$is.object(sourcePrototype)) {
+            return affectedKeys;
+        }
+        switch (mixin) {
+            case "pick":
+            case "omit":
+                $assert.textArray(keys, () => [FQN_PCK, 100, {
+                    message: 'Keys are empty',
+                    mixin,
+                    clazz: this.description,
+                    source: source.description,
+                    method: '$copyInstanceProperties',
+                }]);
+                break;
+            default:
+                keys = undefined;
+                mixin = undefined;
+                break;
+        }
+
+        source.listInstanceProperties().forEach(propRef => {
+            switch (mixin) {
+                case "pick":
+                    if (!keys.includes(propRef.name)) {
+                        return;
+                    }
+                    break;
+                case "omit":
+                    if (keys.includes(propRef.name)) {
+                        return;
+                    }
+                    break;
+            }
+            this.$copyProperty(propRef);
+            affectedKeys.push(propRef.name);
+        });
+        return affectedKeys;
+    }
+    $copyStaticProperties(source: ClassReflectionLike, mixin?: CopyPropertyMixin, keys?: Array<string>): Array<string> {
+        const affectedKeys = [] as Array<string>;
+        switch (mixin) {
+            case "pick":
+            case "omit":
+                $assert.textArray(keys, () => [FQN_PCK, 100, {
+                    message: 'Keys are empty',
+                    mixin,
+                    clazz: this.description,
+                    source: source.description,
+                    method: '$copyInstanceProperties',
+                }]);
+                break;
+            default:
+                keys = undefined;
+                mixin = undefined;
+                break;
+        }
+
+        source.listStaticProperties().forEach(propRef => {
+            switch (mixin) {
+                case "pick":
+                    if (!keys.includes(propRef.name)) {
+                        return;
+                    }
+                    break;
+                case "omit":
+                    if (keys.includes(propRef.name)) {
+                        return;
+                    }
+                    break;
+            }
+            this.$copyProperty(propRef);
+            this.creator[propRef.name] = this.creator.bind(this.creator[propRef.name]);
+            affectedKeys.push(propRef.name);
+        });
+        return affectedKeys;
+    }
+    private _defineProperty(key: string, sourceProto: Obj|Func, targetProto:Obj|Func, value: Func): void {
+        let descriptor = Object.getOwnPropertyDescriptor(sourceProto, key);
+        if (!descriptor) {
+            descriptor = {
+                value: undefined,
+                configurable: true,
+                writable: true,
+                enumerable: true,
+            };
+            if (typeof value === 'function') {
+                if (core.footprint.isAsync(value)) {
+                    descriptor.value = async (...args: Array<any>) => value(...args);
+                }
+                else {
+                    descriptor.value = (...args: Array<any>) => value(...args);
+                }
+                $name.set(descriptor.value, descriptor.value.name);
+            }
+        }
+        Object.defineProperty(targetProto, key, descriptor);
+    }
+    $copyProperty(source: PropertyReflectionLike): PropertyReflectionLike {
+        const name = source.name;
+        switch (source.keyword) {
+            case "instance":
+                if (!this._instanceMap.has(name)) {
+                    const ins = PropertyReflection.copy(this, source);
+                    this._instanceMap.set(name, ins);
+                    this._defineProperty(name, source.clazz.creator.prototype, this.creator.prototype, source.callable);
+                }
+                return this._instanceMap.get(source.name);
+            case "static":
+                if (!this._staticMap.has(source.name)) {
+                    const ins = PropertyReflection.copy(this, source);
+                    this._staticMap.set(source.name, ins);
+                    this._defineProperty(name, source.clazz.creator, this.creator, source.callable);
+                }
+                return this._staticMap.get(source.name);
+            default:
+                throw $dev.developerError({
+                    issue: 'invalid.keyword',
+                    where: 'leyyo.reflection.ClassReflection',
+                    keyword: source.keyword,
+                    clazz: this.name,
+                    property: source.name
+                });
+        }
+    }
+    $createProperty(name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func): PropertyReflectionLike {
         switch (keyword) {
             case "instance":
                 if (!this._instanceMap.has(name)) {
-                    const ins = new PropertyReflection(this, name, keyword, kind, callable, clone);
+                    const ins = PropertyReflection.create(this, name, keyword, kind, callable);
                     this._instanceMap.set(name, ins);
                 }
                 return this._instanceMap.get(name);
             case "static":
                 if (!this._staticMap.has(name)) {
-                    const ins = new PropertyReflection(this, name, keyword, kind, callable, clone);
+                    const ins = PropertyReflection.create(this, name, keyword, kind, callable);
                     this._staticMap.set(name, ins);
                 }
                 return this._staticMap.get(name);

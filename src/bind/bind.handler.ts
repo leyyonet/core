@@ -1,4 +1,15 @@
-import {$assert, $descriptor, $dev, ClassLike, Fnc, Func, Obj, SysFunction, SysFunctionItems} from "@leyyo/common";
+import {
+    $assert,
+    $descriptor,
+    $dev,
+    $name,
+    ClassLike,
+    Fnc,
+    Func,
+    Obj,
+    SysFunction,
+    SysFunctionItems
+} from "@leyyo/common";
 import {core} from "../core";
 import {BindHandlerLike, BindScopeType} from "./index.types";
 import {FQN_PCK} from "./internal";
@@ -46,7 +57,7 @@ export class BindHandler implements BindHandlerLike {
                 if (this._isValidMethod(fn, property, true)) {
                     const old = fn[property].name;
                     fn[property] = this._bind(fn[property], target);
-                    core.nameHandler.set(fn[property], old);
+                    $name.set(fn[property], old);
                     size++;
                 }
             });
@@ -62,7 +73,7 @@ export class BindHandler implements BindHandlerLike {
                 if (this._isValidMethod(fn, property, false)) {
                     const old = fn[property].name;
                     fn[property] = this._bind(fn[property], fn);
-                    core.nameHandler.set(fn[property], old);
+                    $name.set(fn[property], old);
                     size++;
                 }
             });

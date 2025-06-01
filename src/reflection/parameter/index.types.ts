@@ -8,6 +8,9 @@ export interface ParameterReflectionLike extends CoreReflectionLike, ShiftSecure
     info(detailed?: boolean): Dict;
 
     get property(): PropertyReflectionLike;
+    get proto(): ParameterReflectionLike;
+    get hasProto(): boolean;
+    get clones(): Array<ParameterReflectionLike>;
 
     get index(): number;
 
@@ -16,10 +19,11 @@ export interface ParameterReflectionLike extends CoreReflectionLike, ShiftSecure
     get isVariadic(): boolean;
 
     // endregion getters
-    copyDecorators(source: ParameterReflectionLike, args: DecoArgumentParam): void;
+    copyDecorators(source: ParameterReflectionLike): void;
 }
 
 export interface ParameterReflectionSecure extends ShiftMain<ParameterReflectionLike> {
+    $appendCopied(child: ParameterReflectionLike): void;
     $setType(type: Func): this;
 
     $clearValues(type: DecoCLearType, ...decorators: Array<Func | DecoLike | string>): this;

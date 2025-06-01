@@ -38,6 +38,7 @@ export interface CoreReflectionLike {
 
     // region decorator
     setValue<V extends Dict>(ins: DecoInstanceLike, value: V): this;
+    copyValue<V extends Dict>(ins: DecoInstanceLike, value: V): this;
     sortValues(): this;
     clearValue(ins: DecoInstanceLike): this;
 
