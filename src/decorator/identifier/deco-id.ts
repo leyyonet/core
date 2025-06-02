@@ -24,7 +24,7 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
     private _clones: Array<DecoCloneLike<V, M, P>>;
     private _before: Array<DecoIdLike>;
     private _after: Array<DecoIdLike>;
-    private _processor: DecoProcessorLambda<any, V, M, P>;
+    private _processor: DecoProcessorLambda<any, P>;
 
     constructor(fn: Func) {
         this._fn = fn;
@@ -281,7 +281,7 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
         }
         this._instances.push(ins);
     }
-    processor<R = any>(fn: DecoProcessorLambda<R, V, M, P>): this {
+    processor<R = any>(fn: DecoProcessorLambda<R, P>): this {
         if (this._dirty) {
             throw $dev.developerError({
                 issue: 'decorator.already.decorated.someone',
@@ -300,7 +300,7 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
         return this.$setProcessor(fn);
     }
 
-    $setProcessor<R = any>(fn: DecoProcessorLambda<R, V, M, P>): this {
+    $setProcessor<R = any>(fn: DecoProcessorLambda<R, P>): this {
         $assert.func(fn, () => $dev.desc(this, {
             field: 'processor',
             where: 'leyyo.decorator.DecoId',
@@ -339,7 +339,7 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
         if (!$is.bareObject(parameters)) {
             parameters = {} as P;
         }
-        return this._processor(ins, parameters);
+        return this._processor(ins as DecoInstanceLike, parameters);
     }
 
     // endregion processor

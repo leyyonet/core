@@ -33,7 +33,8 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
     private readonly _staticMap: Map<PropertyKey, PropertyReflectionLike>;
     private readonly _body: Obj;
     private _inspected: FootprintInspected;
-    private _propCache: Map<PropertyKey, Array<PropertyReflectionLike>>;
+    private _instanceCache: Map<PropertyKey, Array<PropertyReflectionLike>>;
+    private _staticCache: Map<PropertyKey, Array<PropertyReflectionLike>>;
     private static _functionProperties = [] as Array<string>;
     // endregion properties
     // region methods
@@ -131,11 +132,22 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
         let props: Array<PropertyReflectionLike>;
         filter = this._filter(filter, 'kind');
         const key = `${this.name}~${keyword}~${filter.kind ?? ''}`;
-        if (!this._propCache) {
-            this._propCache = $repo.newMap(FQN_PCK, this._code, 'cache');
+
+        let cache: Map<PropertyKey, Array<PropertyReflectionLike>>;
+        if (keyword === 'instance') {
+            if (!this._instanceCache) {
+                this._instanceCache = $repo.newMap(FQN_PCK, this._code, 'instanceCache');
+            }
+            cache = this._instanceCache;
         }
-        if (this._propCache.has(key)) {
-            return this._propCache.get(key);
+        else {
+            if (!this._staticCache) {
+                this._staticCache = $repo.newMap(FQN_PCK, this._code, 'staticCache');
+            }
+            cache = this._staticCache;
+        }
+        if (cache.has(key)) {
+            return cache.get(key);
         }
         const ins = (keyword === "instance");
         // 'listInstanceProperties', '_instanceMap'
@@ -143,7 +155,7 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
         if (filter.kind) {
             props = props.filter(prop => prop.filterByKind(filter));
         }
-        this._propCache.set(key, props);
+        cache.set(key, props);
         return props;
     }
 
@@ -452,6 +464,34 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
                     clazz: this.name,
                     property: name
                 });
+        }
+    }
+
+    $deleteProperty(name: PropertyKey, keyword: DecoKeyword): boolean {
+        let deleted = false;
+        switch (keyword) {
+            case "instance":
+                if (this._instanceMap.has(name)) {
+                    this._instanceMap.delete(name);
+                    deleted = true;
+                }
+                if (this._instanceCache && this._instanceCache.has(name)) {
+                    this._instanceCache.delete(name);
+                }
+                return deleted;
+            case "static":
+                if (this._staticMap.has(name)) {
+                    this._staticMap.delete(name);
+                    deleted = true;
+                }
+                if (this._staticCache && this._staticCache.has(name)) {
+                    this._staticCache.delete(name);
+                }
+                return deleted;
+            default:
+                const d1 = this.$deleteProperty(name, 'instance');
+                const d2 = this.$deleteProperty(name, 'static');
+                return d1 || d2;
         }
     }
 

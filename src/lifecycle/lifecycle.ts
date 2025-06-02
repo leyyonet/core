@@ -17,14 +17,11 @@ import {FQN_PCK} from "./internal";
 export class Lifecycle implements LifecycleLike {
     private readonly logger = $log.create(Lifecycle);
 
-    protected readonly items: Map<LifecycleStage, Array<LifecycleItem>>;
-    protected readonly allItems: Map<string, LifecycleAllItem>;
-    protected readonly sorted: Array<LifecycleStage>;
+    protected readonly items = $repo.newMap<LifecycleStage, Array<LifecycleItem>>(FQN_PCK, 'items');
+    protected readonly allItems = $repo.newMap<string, LifecycleAllItem>(FQN_PCK, 'allItems');
+    protected readonly sorted = $repo.newArray<LifecycleStage>(FQN_PCK, 'sorted');
 
     constructor() {
-        this.items = $repo.newMap(FQN_PCK, 'items');
-        this.allItems = $repo.newMap(FQN_PCK, 'allItems');
-        this.sorted = $repo.newArray(FQN_PCK, 'sorted');
         this.items.set('initialize', []);
         this.items.set('validate', []);
         this.items.set('process', []);
@@ -68,11 +65,6 @@ export class Lifecycle implements LifecycleLike {
     private _checkText(stage: LifecycleStage, pck: string, field: string): void {
         $assert.text(pck, () => $dev.opt({issue: `Lifecycle item ${field} is invalid`, value: pck, field, stage}));
     }
-    private _checkDuplicated(stage: LifecycleStage, pck: string): void {
-        if (this.items.get(stage).filter(item => item.name === pck).length > 0) {
-            throw $dev.developerError2(FQN_PCK, 100, {message: 'Lifecycle item is duplicated', stage, pck});
-        }
-    }
 
     private _checkStage(stage: LifecycleStage, pck: string): void {
         if (!stage || !this.items.has(stage)) {
@@ -86,7 +78,6 @@ export class Lifecycle implements LifecycleLike {
     private _addItem(stage: LifecycleStage, pck: string, v1:Func|string, v2: Func): LifecycleBuilder {
         this._checkStage(stage, pck);
         this._checkText(stage, pck, 'package');
-        this._checkDuplicated(stage, pck);
         let name: string;
         let fn: Func;
         if (typeof v1 === 'function') {

@@ -1,4 +1,4 @@
-import {$assert, $descriptor, $dev, $is, $log, KeyValue, Obj} from "@leyyo/common";
+import {$assert, $descriptor, $dev, $is, $log, $name, KeyValue, Obj} from "@leyyo/common";
 import {EnumItem, EnumNonFunctional, EnumValue, EnumPoolLike, EnumPoolSecure, EnumType} from "./index.types";
 import {NamedDepotItem, NamedDepotLike, NamedDepotName, NamedDepotSecure} from "../named";
 import {core} from "../core";
@@ -64,12 +64,14 @@ export class EnumPool implements EnumPoolLike, EnumPoolSecure {
     addEnumeration(name: string, target: Obj | Record<string, KeyValue>): void {
         $assert.text(name, () => $dev.opt({field: 'name', method: 'enumeration', where: 'leyyo.enum.EnumPool'}));
         $assert.object(target, () => $dev.opt({field: 'target', method: 'enumeration', where: 'leyyo.enum.EnumPool'}));
+        this.logger.info('Add-enum: ' + name);
         this.$add(target);
     }
 
     addLiteral(name: string, target: unknown): void {
         $assert.text(name, () => $dev.opt({field: 'name', method: 'literal', where: 'leyyo.enum.EnumPool'}));
         $assert.array(target, () => $dev.opt({field: 'target', method: 'literal', where: 'leyyo.enum.EnumPool'}));
+        this.logger.info('Add-literal: ' + name);
         this.$add(target);
     }
 
@@ -113,7 +115,8 @@ export class EnumPool implements EnumPoolLike, EnumPoolSecure {
                 const bases = this._secure.$bases
                     .filter(base => this._depot.equals(base, value, target, items));
                 bases.forEach(base => {
-                    base.full = core.fqnHandler.normalizeName(name);
+                    $name.validate(name, true);
+                    base.full = name;
                     this._secure.$clearAliases(base);
                     this._secure.$appendAliases(base);
                 });
@@ -138,6 +141,7 @@ export class EnumPool implements EnumPoolLike, EnumPoolSecure {
     // endregion secure
 
 
+    // noinspection JSUnusedGlobalSymbols
     toJSON(): any {
         return {
             __: EnumPool.name,

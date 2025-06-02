@@ -1,4 +1,4 @@
-import {$descriptor, $dev, $is, $log, $repo, List, Logger} from "@leyyo/common";
+import {$descriptor, $dev, $is, $log, $name, $repo, List, Logger} from "@leyyo/common";
 import {
     NamedDepotAliasItem,
     NamedDepotEqualsLambda,
@@ -219,8 +219,8 @@ export class NamedDepot<V extends NamedDepotValue, P extends NamedDepotValue> im
         if (!base) {
             return false;
         }
-        name = core.fqnHandler.normalizeName(name);
-        return name && ![base.basic, base.full].includes(name);
+        $name.validate(name, true);
+        return ![base.basic, base.full].includes(name);
     }
 
     isSource(name: string): boolean {
@@ -228,8 +228,8 @@ export class NamedDepot<V extends NamedDepotValue, P extends NamedDepotValue> im
         if (!base) {
             return false;
         }
-        name = core.fqnHandler.normalizeName(name);
-        return name && [base.basic, base.full].includes(name);
+        $name.validate(name, true);
+        return [base.basic, base.full].includes(name);
     }
 
     equals(base: NamedDepotItem<V, P>, ...pointers: Array<NamedDepotValue>): boolean {
@@ -408,7 +408,8 @@ export class NamedDepot<V extends NamedDepotValue, P extends NamedDepotValue> im
             core.fqnHandler.onReady(fn, (name: string) => {
                 const bases = this.$bases.filter(base => this.equals(base, value, pointer));
                 bases.forEach(base => {
-                    base.full = core.fqnHandler.normalizeName(name);
+                    $name.validate(name, true);
+                    base.full = name;
                     this.$clearAliases(base);
                     this.$appendAliases(base);
                 });
@@ -429,11 +430,9 @@ export class NamedDepot<V extends NamedDepotValue, P extends NamedDepotValue> im
         const base = {value, basic, full, aliases: [], pointers: [value, pointer], id: NamedDepot._id};
         if (Array.isArray(aliases)) {
             aliases.forEach(alias => {
-                alias = core.fqnHandler.normalizeName(alias);
-                if (alias) {
-                    if (!base.aliases.includes(alias)) {
-                        base.aliases.push(alias);
-                    }
+                $name.validate(alias, true);
+                if (!base.aliases.includes(alias)) {
+                    base.aliases.push(alias);
                 }
             });
         }

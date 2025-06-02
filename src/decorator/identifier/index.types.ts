@@ -3,7 +3,6 @@ import {DecoLike} from "../abstract";
 import {DecoCloneLike} from "../clone";
 import {DecoInstanceLike} from "../instance";
 import {DecoRule} from "../literals";
-import {ReflectionTag} from "../../reflection";
 
 /**
  * DecoratorPool identifier
@@ -27,7 +26,7 @@ export interface DecoIdLike<V = Dict, M = Dict, P = V> extends DecoLike<V, M, P>
 
     rules(...rules: Array<DecoRule>): this;
 
-    processor<R = any>(fn: DecoProcessorLambda<R, V, M, P>): this;
+    processor<R = any>(fn: DecoProcessorLambda<R, P>): this;
     addInstance(ins: DecoInstanceLike): void;
 
     dirty(): void;
@@ -36,7 +35,7 @@ export interface DecoIdLike<V = Dict, M = Dict, P = V> extends DecoLike<V, M, P>
 export interface DecoIdSecure<V = Dict, M = Dict, P = V> extends ShiftMain<DecoIdLike<V, M, P>> {
     $setMetadata(metadata: M): this;
 
-    $setProcessor<R = any>(fn: DecoProcessorLambda<R, V, M, P>): this;
+    $setProcessor<R = any>(fn: DecoProcessorLambda<R, P>): this;
 }
 
-export type DecoProcessorLambda<R, V = Dict, M = Dict, P = V> = (ins: DecoInstanceLike<V, M, P>, parameters?: P) => R;
+export type DecoProcessorLambda<R, P> = (ins: DecoInstanceLike, parameters?: P) => R;

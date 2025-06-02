@@ -451,8 +451,8 @@ export class Footprint implements FootprintLike, FootprintSecure {
                 this._forOthers(prepared, inspected);
             }
             this.arrayFields.forEach(f => {
-                if (inspected[f] && (inspected[f] as Arr).length < 1) {
-                    delete inspected[f].keywords;
+                if (Array.isArray(inspected[f]) && (inspected[f] as Arr).length < 1) {
+                    delete inspected[f];
                 }
             });
             this.primitiveFields.forEach(f => {

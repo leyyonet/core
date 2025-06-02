@@ -17,7 +17,7 @@ import {
     LeyyoCommonHook,
     Obj
 } from "@leyyo/common";
-import {FqnDetail, FqnGroupType, FqnHandlerLike, FqnHandlerSecure, FqnNaming} from "./index.types";
+import {FqnDetail, FqnGroupType, FqnHandlerLike, FqnHandlerSecure, FqnNaming, FqnPossibleResult} from "./index.types";
 import {FootprintInspected, FootprintKeyword} from "../footprint";
 import {core} from "../core";
 import {FQN_PCK} from "./internal";
@@ -26,7 +26,7 @@ import {FqnAllSign} from "./index.symbols";
 
 
 export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
-
+    private readonly _CLASS_MEMBERS = false;
     private readonly logger = $log.create(FqnHandler);
 
     constructor() {
@@ -80,7 +80,7 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
 
     private _addDecoKeyword(target: Func) {
         const inspected = core.footprint.get(target);
-        if (inspected && !inspected.keywords.includes('decorator')) {
+        if (inspected && inspected.keywords && !inspected.keywords.includes('decorator')) {
             inspected.keywords.push('decorator');
             core.footprint.$secure.$save(target, inspected);
         }
@@ -121,38 +121,40 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
         return false;
     }
 
-    private _possibleLiteral(name: string, target: Arr, path: string, possible: boolean, inside: boolean): boolean {
+    private _possibleLiteral(name: string, target: Arr, path: string, possible: boolean, inside: boolean): FqnPossibleResult {
         if (inside) {
             if (!Array.isArray(target)) {
                 this.logger.deploy.$warning(FQN_PCK, 100, {type: typeof target, name, message: 'Invalid literal array'});
-                return false;
+                return 'error';
             }
         }
         // already defined
-        if (this.get(target)) {
-            return true;
+        if (this.$get(target)) {
+            return 'exists';
         }
 
         const inspected = core.footprint.inspect(target);
         if (!inspected) {
-            return;
+            return 'error';
         }
         if (inspected.type !== 'object') {
             this.logger.deploy.$warning(FQN_PCK, 100, {type: typeof target, name, inspected, message: 'Invalid literal'});
-            return false;
+            return 'error';
         }
         if (inspected.constructor?.name !== 'Array') {
             // constructor should be an array
-            return false;
+            return 'error';
         }
         let changed = false;
-        if (!inspected.keywords.includes('literal')) {
-            inspected.keywords.push('literal');
-            changed = true;
-        }
-        if (possible && !inspected.keywords.includes('possible')) {
-            inspected.keywords.push('possible');
-            changed = true;
+        if (Array.isArray(inspected.keywords)) {
+            if (!inspected.keywords.includes('literal')) {
+                inspected.keywords.push('literal');
+                changed = true;
+            }
+            if (possible && !inspected.keywords.includes('possible')) {
+                inspected.keywords.push('possible');
+                changed = true;
+            }
         }
         if (changed) {
             core.footprint.$secure.$save(target, inspected);
@@ -161,7 +163,7 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
         const invalidValues = target.filter(item => !['string', 'number'].includes(typeof item));
         if (invalidValues.length > 0) {
             // all items should be string or number
-            return false
+            return 'next'
         }
         const full = this._full(name, path);
         if (full) {
@@ -172,9 +174,11 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
             // call waiting hooks
             $fqn.$secure.$runHooks(target, full);
 
-            return true;
+            core.enumPool.$secure.$add(target);
+
+            return 'signed';
         }
-        return false;
+        return 'next';
     }
 
     private _renameAnonymous(name: string, fn: unknown, inspected: FootprintInspected): boolean {
@@ -200,7 +204,7 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
             }
         }
         // already defined
-        if (this.get(target)) {
+        if (this.$get(target)) {
             return true;
         }
 
@@ -217,7 +221,7 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
             this.logger.deploy.$warning(FQN_PCK, 100, {type: typeof target, name, inspected, message: 'Invalid object construction'});
             return false;
         }
-        if (inspected.keywords.includes('enum')) {
+        if (inspected.keywords?.includes('enum')) {
             // this object was already signed as an enum
             return false;
         }
@@ -267,7 +271,7 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
                 if (Array.isArray(target)) {
                     this._possibleLiteral(name, target, path, true, false);
                 } else {
-                    if (!this._possibleEnum(name, target, path, true, false)) {
+                    if (this._possibleEnum(name, target, path, true, false) === 'next') {
                         if (next) {
                             this._group(null, {name: target}, 'namespace', path);
                         } else {
@@ -299,38 +303,40 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
         }
     }
 
-    private _possibleEnum(name: string, target: Obj, path: string, possible: boolean, inside: boolean): boolean {
+    private _possibleEnum(name: string, target: Obj, path: string, possible: boolean, inside: boolean): FqnPossibleResult {
         if (inside) {
-            if (!$is.object(target)) {
-                return false;
+            if (!$is.bareObject(target)) {
+                return 'error';
             }
         }
         // already defined
-        if (this.get(target)) {
-            return true;
+        if (this.$get(target)) {
+            return 'exists';
         }
 
         const inspected = core.footprint.inspect(target);
         if (!inspected) {
-            return;
+            return 'error';
         }
         if (!inspected || inspected.type !== 'object') {
             this.logger.deploy.$warning(FQN_PCK, 100, {type: typeof target, name, message: 'Invalid enum'});
-            return false;
+            return 'error';
         }
         if (inspected.constructor !== Object) {
             // constructor should be an object
             this.logger.deploy.$warning(FQN_PCK, 100, {type: typeof target, name, message: 'Invalid enum constructor'});
-            return false;
+            return 'error';
         }
         let changed = false;
-        if (!inspected.keywords.includes('enum')) {
-            inspected.keywords.push('enum');
-            changed = true;
-        }
-        if (possible && !inspected.keywords.includes('possible')) {
-            inspected.keywords.push('possible');
-            changed = true;
+        if (Array.isArray(inspected.keywords)) {
+            if (!inspected.keywords.includes('enum')) {
+                inspected.keywords.push('enum');
+                changed = true;
+            }
+            if (possible && !inspected.keywords.includes('possible')) {
+                inspected.keywords.push('possible');
+                changed = true;
+            }
         }
         if (changed) {
             core.footprint.$secure.$save(target, inspected);
@@ -341,11 +347,11 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
             if (desc) {
                 if (typeof desc.get === 'function' || typeof desc.set === 'function') {
                     // property has getter or setter
-                    return false;
+                    return 'next';
                 }
                 if (!$is.typeOf(desc.value, 'string', 'number')) {
                     // property type is not string or number
-                    return false;
+                    return 'next';
                 }
             }
         }
@@ -358,10 +364,10 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
 
             // call waiting hooks
             $fqn.$secure.$runHooks(target, full);
-
-            return true;
+            core.enumPool.$secure.$add(target);
+            return 'signed';
         }
-        return false;
+        return 'next';
     }
 
     private _clazzMembers(holder: Func | Obj, naming: FqnNaming, keyword: FootprintKeyword): void {
@@ -428,13 +434,15 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
             this.$set(target, naming);
             this.logger.debug(`class: ${full}`);
 
-            // instance-members
-            if (this._isEffectiveTarget(target.name, target.prototype)) {
-                this._clazzMembers(target.prototype, naming, 'instance');
-            }
+            if (this._CLASS_MEMBERS) {
+                // instance-members
+                if (this._isEffectiveTarget(target.name, target.prototype)) {
+                    this._clazzMembers(target.prototype, naming, 'instance');
+                }
 
-            // static-members
-            this._clazzMembers(target, naming, 'static');
+                // static-members
+                this._clazzMembers(target, naming, 'static');
+            }
 
             // call waiting hooks
             $fqn.$secure.$runHooks(target, full);
@@ -488,55 +496,13 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
         $fqn.$secure.$appendHook(fn, callback);
     }
 
-    protected _camelCase(name: string): string {
-        if (!name.includes('_')) {
-            name = name.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-        }
-        if (name.includes('_')) {
-            name = name.replace(/(_\w)/g, k => k[1].toUpperCase());
-        }
-        return name[0].toUpperCase() + name.substring(1);
-    }
-
-    normalizeName(name: string): string {
-        $assert.text(name, () => $dev.opt({field: 'name', where: 'leyyo.fqn.FqnHandler', method: 'normalizeName'}));
-        if (!name) {
-            return null;
-        }
-        if (!name.includes('.')) {
-            return this._camelCase(name);
-        }
-        const parts = name.split('.');
-        let arr = [] as Array<string>;
-        parts.forEach(part => {
-            part = part.trim();
-            if (part !== '') {
-                arr.push(part);
-            }
-        });
-        switch (arr.length) {
-            case 0:
-                return null;
-            case 1:
-                return this._camelCase(arr[0]);
-            default:
-                const last = this._camelCase(arr.pop());
-                arr = arr.map(item => item.toLowerCase());
-                arr.push(last);
-                return arr.join('.');
-        }
-    }
-
     copy(source: any, target: any): void {
         if (this.exists(source)) {
             this.$set(target, this.$get(source));
         }
     }
     toNaming(name: string): FqnNaming {
-        name = this.normalizeName(name);
-        if (!name) {
-            return {basic: undefined, full: undefined, pck: undefined};
-        }
+        $name.validate(name, true);
         if (!name.includes('.')) {
             return {basic: name, full: name, pck: undefined};
         }
@@ -589,7 +555,6 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
         }));
         $assert.text(path, () => $dev.opt({field: 'path', where: 'leyyo.fqn.FqnHandler', method: 'enumeration', name}));
         this._possibleEnum(name, target, path, false, false);
-        core.enumPool.$secure.$add(target);
     }
 
     literal(name: string, target: unknown, path: string): void {
@@ -602,7 +567,6 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
         }));
         $assert.text(path, () => $dev.opt({field: 'path', where: 'leyyo.fqn.FqnHandler', method: 'literal', name}));
         this._possibleLiteral(name, target as Array<KeyValue>, path, false, false);
-        core.enumPool.$secure.$add(target);
     }
 
     object(name: string, target: Obj, path: string): void {
@@ -646,9 +610,8 @@ export class FqnHandler implements FqnHandlerLike, FqnHandlerSecure {
     $set(target: any, naming: FqnNaming): boolean {
         switch (typeof target) {
             case "function":
-                return $descriptor.save<FqnNaming>(target, FqnAllSign, naming, true);
             case "object":
-                break;
+                return $descriptor.save<FqnNaming>(target, FqnAllSign, naming, true);
         }
         return false;
     }

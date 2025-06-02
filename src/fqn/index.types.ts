@@ -12,8 +12,6 @@ export interface FqnHandlerLike extends ShiftSecure<FqnHandlerSecure> {
 
     onReady(fn: Func | ClassLike | Obj, callback: CommonFqnHook): void;
 
-    normalizeName(name: string): string;
-
     toNaming(name: string): FqnNaming;
 
     copy(source: any, target: any): void;
@@ -59,3 +57,4 @@ export interface FqnNaming {
     full?: string;
     pck?: string;
 }
+export type FqnPossibleResult = 'exists' | 'signed' | 'next' | 'error';
