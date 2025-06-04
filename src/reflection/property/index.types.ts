@@ -17,10 +17,6 @@ import {FootprintInspected} from "../../footprint";
 
 export interface PropertyReflectionLike extends CoreReflectionLike, ShiftSecure<PropertyReflectionSecure> {
     // region getters
-    /**
-     * Returns info about property
-     * */
-    info(detailed?: boolean): Dict;
 
     /**
      * Returns class reflection

@@ -11,6 +11,8 @@ import {LifecycleLike} from "../lifecycle";
 import {$$coreInternalOn} from "../internal";
 import {FQN_PCK} from "./internal";
 
+class Core2 {constructor () {}}
+
 class Core implements CoreLike, CoreSecure {
     constructor() {
     }
@@ -156,6 +158,7 @@ class Core implements CoreLike, CoreSecure {
 }
 
 $$coreInternalOn('class-instance', () => {
+    core.fqnHandler.clazz(Core2, FQN_PCK);
     core.fqnHandler.clazz(Core, FQN_PCK);
 });
 export const core: CoreLike = new Core();

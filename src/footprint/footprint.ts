@@ -1,8 +1,8 @@
-import {$descriptor, $dev, $log, Arr, Func} from "@leyyo/common";
+import {$descriptor, $dev, $log, Arr, ClassLike, Func} from "@leyyo/common";
 import {
     FootprintInspected,
     FootprintKeyword,
-    FootprintLike,
+    FootprintLike, FootprintParamName,
     FootprintParamNameExtended,
     FootprintPrepared,
     FootprintSecure
@@ -12,11 +12,12 @@ import {core} from "../core";
 import {$$coreInternalOn} from "../internal";
 import {FootprintSign} from "./index.symbols";
 import {FinalClassSign} from "../reflection/index.symbols";
+import {CONSTRUCTOR} from "../reflection/internal";
 
 
 export class Footprint implements FootprintLike, FootprintSecure {
     private readonly arrayFields = ['keywords', 'params'];
-    private readonly primitiveFields = ['proto', 'constructor', 'parent'];
+    private readonly primitiveFields = ['proto', CONSTRUCTOR, 'parent'];
 
     private readonly logger = $log.create(Footprint);
 
@@ -55,8 +56,23 @@ export class Footprint implements FootprintLike, FootprintSecure {
         stack.pop();
         return this._removeStackItem(stack, prefix);
     }
+    private _checkParamNames(params: Array<string>): Array<FootprintParamName> {
+        if (params.length < 1) {
+            return [];
+        }
+        return params
+            .map((p: string) => p.trim())
+            .map((p: string) => {
+                if (p.startsWith('...')) {
+                    return [p.replace((/\./g), '').trim(), 'variadic'] as FootprintParamNameExtended;
+                } else if (p.endsWith('=')) {
+                    return [p.replace(/=/g, '').trim(), 'default'] as FootprintParamNameExtended;
+                }
+                return p;
+            });
+    }
 
-    private _parseParamNames(fullPath: string): Array<string> {
+    private _parseParamNames(fullPath: string): Array<FootprintParamName> {
         // console.log(`Start[${fullPath}]`);
         // console.log(`-----------------------`);
         let i = 0;
@@ -145,13 +161,13 @@ export class Footprint implements FootprintLike, FootprintSecure {
                                 arr.push(collected);
                                 collected = '';
                             }
-                            return arr;
+                            return this._checkParamNames(arr);
                         } else {
                             if (current.startsWith('other-def') || current.startsWith('other-(')) {
                                 // console.log(`<< Back[${i}]: ${chr} ==> ${current}`);
                                 stack.pop();
                                 if (stack[stack.length - 1] === 'in-param') {
-                                    return arr;
+                                    return this._checkParamNames(arr);
                                 }
                             } else {
                                 const found = this._removeStackItem(stack, 'other-(');
@@ -242,9 +258,7 @@ export class Footprint implements FootprintLike, FootprintSecure {
                 arr.push(collected);
             }
         }
-        // console.log(`-----------------------`);
-        // console.log(`found`, arr);
-        return arr;
+        return this._checkParamNames(arr);
     }
 
     private _prepare(target: unknown): FootprintPrepared {
@@ -308,6 +322,23 @@ export class Footprint implements FootprintLike, FootprintSecure {
             });
         }
     }
+    private _forConstructor(path: string, inspected: FootprintInspected): void {
+        const separator = ` ${CONSTRUCTOR}(`
+        const parts = path.split(separator);
+        if (parts.length > 1) {
+            inspected.keywords.push(CONSTRUCTOR);
+            parts.shift();
+            for (const part of parts) {
+                // ignore empty parameters
+                if (!part.startsWith(')')) {
+                    inspected.params = this._parseParamNames('(' + part);
+                    if (Array.isArray(inspected.params) && inspected.params.length > 0) {
+                        return;
+                    }
+                }
+            }
+        }
+    }
 
     private _forFunction(prepared: FootprintPrepared, inspected: FootprintInspected): void {
         if (prepared.func.substring(0, prepared.func.indexOf('(')).trim() === '') {
@@ -343,22 +374,11 @@ export class Footprint implements FootprintLike, FootprintSecure {
             }
 
         }
-        const paramNames = this._parseParamNames(prepared.paramLine);
-        const params = paramNames
-            .map((p: string) => p.trim())
-            .map((p: string) => {
-                if (p.startsWith('...')) {
-                    return [p.replace((/\./g), '').trim(), 'variadic'] as FootprintParamNameExtended;
-                } else if (p.endsWith('=')) {
-                    return [p.replace(/=/g, '').trim(), 'default'] as FootprintParamNameExtended;
-                }
-                return p;
-            });
         if (prepared.proto) {
             prepared.keywords.push('system');
         }
         inspected.keywords.push(...prepared.keywords);
-        inspected.params.push(...params);
+        inspected.params.push(...this._parseParamNames(prepared.paramLine));
     }
 
     private _forOthers(prepared: FootprintPrepared, inspected: FootprintInspected): void {
@@ -445,6 +465,7 @@ export class Footprint implements FootprintLike, FootprintSecure {
                 this._forObject(prepared, inspected);
             } else if (prepared.func?.startsWith('class')) {
                 this._forClass(prepared, inspected);
+                this._forConstructor(prepared.func, inspected);
             } else if (prepared.type === 'function') {
                 this._forFunction(prepared, inspected);
             } else {

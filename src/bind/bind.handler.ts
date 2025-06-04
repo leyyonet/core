@@ -15,6 +15,7 @@ import {BindHandlerLike, BindScopeType} from "./index.types";
 import {FQN_PCK} from "./internal";
 import {$$coreInternalOn} from "../internal";
 import {BindSign} from "./index.symbols";
+import {CONSTRUCTOR} from "../reflection/internal";
 
 /** @inheritDoc */
 export class BindHandler implements BindHandlerLike {
@@ -27,7 +28,7 @@ export class BindHandler implements BindHandlerLike {
      * - System functions are excluded
      * */
     protected _isValidMethod(target: Func | Obj | ClassLike, key: string, isInstance: boolean): boolean {
-        if (key === (isInstance ? 'constructor' : 'prototype') || typeof key === 'symbol' || SysFunctionItems.includes(key as SysFunction)) {
+        if (key === (isInstance ? CONSTRUCTOR : 'prototype') || typeof key === 'symbol' || SysFunctionItems.includes(key as SysFunction)) {
             return false;
         }
         const desc = $descriptor.get(target, key);

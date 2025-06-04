@@ -28,8 +28,6 @@ export interface DecoInstanceLike<V = Dict, M = Dict, P = V> {
     /**
      * Unique code
      * */
-    get code(): string;
-
     get target(): Target;
 
     get assigned(): CoreReflectionLike;
@@ -39,8 +37,6 @@ export interface DecoInstanceLike<V = Dict, M = Dict, P = V> {
     // endregion getters
 
     // region methods
-    info(detailed?: boolean): Dict;
-
     set(value?: V): CoreReflectionLike;
     delete(): void;
 

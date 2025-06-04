@@ -1,7 +1,6 @@
-import {$assert, $dev, $is, $repo, Arr, Dict, Func, List} from "@leyyo/common";
+import {$assert, $dev, $is, Arr, Dict, Func, List} from "@leyyo/common";
 import {CoreReflectionLike, ReflectionMeta, ReflectionTag} from "./index-types";
 import {
-    DecoArguments,
     DecoCLearType,
     DecoClone,
     DecoDoc,
@@ -28,7 +27,6 @@ export abstract class AbstractReflection implements CoreReflectionLike {
         kind: ['field', 'method'],
         keyword: ['static', 'instance'],
     };
-    protected readonly _code: string;
     protected _name: string;
     protected _target: Target;
     protected _type: Func;
@@ -41,8 +39,7 @@ export abstract class AbstractReflection implements CoreReflectionLike {
     private _hasSelf: boolean;
 
     // endregion properties
-    protected constructor(...args: Array<string|number>) {
-        this._code = args.join('.');
+    protected constructor() {
     }
 
     // region private
@@ -61,20 +58,6 @@ export abstract class AbstractReflection implements CoreReflectionLike {
     // endregion private
     // region getters
     // noinspection JSUnusedLocalSymbols
-    info(_detailed?: boolean): Dict {
-        const result = {identifiers: []};
-        if (this._docs) {
-            result.identifiers.push(...this._docs.map(doc => {
-                return {
-                    identifier: doc.ins.identifier.name,
-                    inherited: doc.inherited,
-                    value: doc.value,
-                };
-            }))
-        }
-        return result;
-    }
-
     abstract get description(): string;
 
     get target(): Target {
@@ -210,10 +193,10 @@ export abstract class AbstractReflection implements CoreReflectionLike {
     }
     private _createDocs(clear?: boolean): void {
         if (!this._docs) {
-            this._docs = $repo.newList(FQN_PCK, this._code, 'docs');
+            this._docs = new List();
         }
         else if (clear) {
-            this._docs.splice(0, this._docs.length);
+            this._docs.clear();
         }
     }
     private _appendValue<V extends Dict>(ins: DecoInstanceLike, value: V, inherited: boolean, copied: boolean): void {
@@ -510,15 +493,34 @@ export abstract class AbstractReflection implements CoreReflectionLike {
         return this;
     }
 
-    toJSON(_simple?: boolean): any {
-        return {
-            decorators: this._decorators ? this._decorators?.map(d => d.name) : [],
-        }
-    }
-    get code(): string {
-        return this._code;
-    }
+    toJSON(simple?: boolean): any {
+        const rec = {};
+        if (this._docs) {
+            rec['decorators'] = this._docs.map(doc => {
+                const rec = {};
+                rec['deco'] = doc.ins.toJSON(true);
+                if (doc.inherited) {
+                    rec['inherited'] = true;
+                }
+                if (doc.copied) {
+                    rec['copied'] = true;
+                }
+                rec['value'] = doc.value;
+                return rec;
+            });
 
+        }
+        if (simple) {
+            return rec;
+        }
+        if (this._keywords) {
+            rec['keywords'] = this._keywords;
+        }
+        if (this._metadata) {
+            rec['metadata'] = this._metadata;
+        }
+        return rec;
+    }
 }
 
 $$coreInternalOn('class-instance', () => {

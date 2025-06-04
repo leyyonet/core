@@ -49,17 +49,6 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
     }
 
     // region getter
-    info(detailed?: boolean): Dict {
-        const rec = {
-            name: this.name,
-        } as Dict;
-        if (detailed) {
-            rec.targets = [...this._targets];
-            rec.rules = [...this._rules];
-        }
-        return rec;
-    }
-
     get name(): string {
         if (!this._name) {
             this._name = core.fqnHandler.get(this._fn);
@@ -541,23 +530,35 @@ export class DecoId<V = Dict, M = Dict, P = V> implements DecoIdLike<V, M, P>, D
     toJSON(simple?: boolean): any {
         if (simple) {
             return {
-                name: this._name,
-                fn: this._fn?.name,
-                targets: this._targets,
-                rules: this._rules,
-                keywords: this._keywords ? this._keywords.map(key => typeof key === 'symbol' ? `[${key.description}]` : key) : [],
+                name: this.name,
+                kind: 'id',
             };
         }
-        return {
-            __: DecoId.name,
-            name: this._name,
-            fn: this._fn?.name,
+        const rec = {
+            name: this.name,
+            kind: 'id',
             targets: this._targets,
             rules: this._rules,
-            keywords: this._keywords ? this._keywords.map(key => typeof key === 'symbol' ? `[${key.description}]` : key) : [],
-            clones: this._clones ? this._clones.map(c => c.toJSON(true)) : [],
-            instances: this._instances ? this._instances.map(c => c.toJSON(true)) : [],
         };
+        if (this._metadata) {
+            rec['metadata'] = this._metadata;
+        }
+        if (this._keywords) {
+            rec['keywords'] = this._keywords.map(key => typeof key === 'symbol' ? `[${key.description}]` : key);
+        }
+        if (this._before) {
+            rec['before'] = this._before.map(c => c.toJSON(true));
+        }
+        if (this._after) {
+            rec['after'] = this._after.map(c => c.toJSON(true));
+        }
+        if (this._clones) {
+            rec['clones'] = this._clones.map(c => c.toJSON(true));
+        }
+        if (this._instances) {
+            rec['instances'] = this._instances.map(c => c.toJSON(true));
+        }
+        return rec;
     }
 }
 

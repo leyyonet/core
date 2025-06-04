@@ -12,7 +12,6 @@ import {DecoRule} from "../literals";
  * */
 export interface DecoIdLike<V = Dict, M = Dict, P = V> extends DecoLike<V, M, P>, ShiftSecure<DecoIdSecure<V, M, P>> {
     // region public
-    info(detailed?: boolean): Dict; // todo
     get clones(): Array<DecoCloneLike<V, M, P>>;
     addClone(clone: DecoCloneLike<V, M, P>): void;
 

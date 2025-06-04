@@ -13,8 +13,6 @@ export type ReflectionTag = string|symbol;
 export type ReflectionMeta = Record<ReflectionTag, any>;
 export interface CoreReflectionLike {
     // region getters
-    info(detailed?: boolean): Dict;
-
     get name(): string;
 
     get target(): Target;
@@ -22,8 +20,6 @@ export interface CoreReflectionLike {
     get type(): Func;
 
     get description(): string;
-
-    get code(): string;
 
     // endregion getters
 

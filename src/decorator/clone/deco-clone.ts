@@ -1,5 +1,5 @@
 import {$assert, $dev, ClassLike, Dict, Func} from "@leyyo/common";
-import {DecoClonedDetail, DecoCloneLike} from "./index.types";
+import {DecoCloneLike} from "./index.types";
 import {DecoIdLike} from "../identifier";
 import {ClassReflectionLike, ParameterReflectionLike, PropertyReflectionLike} from "../../reflection";
 import {DecoFilter, DecoLike} from "../abstract";
@@ -8,7 +8,6 @@ import {DecoInstance, DecoInstanceLike} from "../instance";
 import {core} from "../../core";
 import {$$coreInternalOn} from "../../internal";
 import {FQN_PCK} from "../internal";
-
 
 export class DecoClone<V = Dict, M = Dict, P = V> implements DecoCloneLike<V, M, P> {
     private readonly _fn: Func;
@@ -28,14 +27,6 @@ export class DecoClone<V = Dict, M = Dict, P = V> implements DecoCloneLike<V, M,
             });
         }
         id.addClone(this);
-    }
-
-    // noinspection JSUnusedLocalSymbols
-    info(detailed?: boolean): DecoClonedDetail {
-        return {
-            name: this.name,
-            identifier: {'$ref': this._id.description},
-        }
     }
 
     get description(): string {
@@ -240,17 +231,15 @@ export class DecoClone<V = Dict, M = Dict, P = V> implements DecoCloneLike<V, M,
     toJSON(simple?: boolean): any {
         if (simple) {
             return {
-                name: this._name,
-                fn: this._fn?.name,
-                targets: this._targets,
+                name: this.name,
+                kind: 'clone',
             };
         }
         return {
-            __: DecoClone.name,
-            name: this._name,
-            fn: this._fn?.name,
-            id: this._id?.name,
+            name: this.name,
+            kind: 'clone',
             targets: this._targets,
+            id: this._id.toJSON(false),
         };
     }
 }

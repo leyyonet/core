@@ -15,8 +15,6 @@ import {FootprintInspected} from "../../footprint";
 
 export interface ClassReflectionLike extends CoreReflectionLike, ShiftSecure<ClassReflectionSecure> {
     // region getters
-    info(detailed?: boolean): Dict;
-
     get parent(): ClassReflectionLike;
 
     get creator(): ClassLike;
@@ -35,6 +33,7 @@ export interface ClassReflectionLike extends CoreReflectionLike, ShiftSecure<Cla
 
     listInstanceProperties(filter?: DecoFilterKind): Array<PropertyReflectionLike>;
 
+    getConstructor(): PropertyReflectionLike;
     getInstanceProperty(name: PropertyKey, filter?: DecoFilterKind): PropertyReflectionLike;
 
     hasInstanceProperty(name: PropertyKey, filter?: DecoFilterKind): boolean
@@ -68,9 +67,9 @@ export interface ClassReflectionSecure extends CoreReflectionLike, ShiftMain<Cla
     $copyInstanceProperties(source: ClassReflectionLike, mixin?: CopyPropertyMixin, keys?: Array<string>): Array<string>;
     $copyStaticProperties(source: ClassReflectionLike, mixin?: CopyPropertyMixin, keys?: Array<string>): Array<string>;
     $copyProperty(source: PropertyReflectionLike): PropertyReflectionLike;
-    $createProperty(name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func): PropertyReflectionLike;
+    $createProperty(name: string, keyword: DecoKeyword, kind: DecoKind, callable?: Func): PropertyReflectionLike;
 
-    $deleteProperty(name: PropertyKey, keyword: DecoKeyword): boolean;
+    $deleteProperty(name: string, keyword: DecoKeyword): boolean;
 
     $clearValues(type: DecoCLearType, ...decorators: Array<Func | DecoLike | string>): this;
 }

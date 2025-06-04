@@ -1,11 +1,11 @@
-import {$assert, $dev, Dict, Func} from "@leyyo/common";
+import {$dev, Func} from "@leyyo/common";
 import {AbstractReflection} from "../abstract";
 import {ParameterReflectionLike, ParameterReflectionSecure} from "./index.types";
 import {PropertyReflectionLike} from "../property";
 import {core} from "../../core";
 import {$$coreInternalOn} from "../../internal";
 import {FQN_PCK} from "../internal";
-import {DecoArgumentParam} from "../../decorator";
+import {fqnHandler} from "../../index";
 
 
 // noinspection Annotator
@@ -29,36 +29,34 @@ export class ParameterReflection extends AbstractReflection implements Parameter
                 index,
             });
         }
-        const ins = new ParameterReflection(property.code, index);
+        const ins = new ParameterReflection();
         ins._target = 'parameter';
         ins._property = property;
         ins._index = index;
         ins._type = typeof type === 'function' ? type : undefined;
 
-        if (!name) {
-            if (property.inspected?.params && property.inspected?.params[index]) {
-                const param = property.inspected.params[index];
-                if (param) {
-                    if (Array.isArray(param)) {
-                        ins._name = param[0];
-                        if (param[1] === 'default') {
-                            ins._hasDefault = true;
-                        } else if (param[1] === 'variadic') {
-                            ins._isVariadic = true;
-                        }
-                    } else {
-                        ins._name = param;
+        const inspected = property.inspected;
+        let refName: string;
+        if (inspected?.params && inspected?.params[index]) {
+            const param = inspected.params[index];
+            if (param) {
+                if (Array.isArray(param)) {
+                    refName = param[0];
+                    if (param[1] === 'default') {
+                        ins._hasDefault = true;
+                    } else if (param[1] === 'variadic') {
+                        ins._isVariadic = true;
                     }
+                } else {
+                    refName = param;
                 }
             }
         }
-        else {
-            ins._name = name;
-        }
+        ins._name = name ?? refName;
         return ins;
     }
     static copy(property: PropertyReflectionLike, source: ParameterReflectionLike): ParameterReflection {
-        const ins = new ParameterReflection(source.code);
+        const ins = new ParameterReflection();
         ins._target = source.target;
         ins._property = property;
 
@@ -75,23 +73,6 @@ export class ParameterReflection extends AbstractReflection implements Parameter
     }
 
     // region getters
-    info(detailed?: boolean): Dict {
-        if (!detailed) {
-            return {
-                index: this._index,
-                type: core.fqnHandler.detail(this._type),
-            }
-        }
-        return {
-            index: this._index,
-            description: this.description,
-            property: {'$ref': this._property.description},
-            type: core.fqnHandler.detail(this._type),
-            name: this._name,
-            ...(super.info()),
-        }
-    }
-
     get property(): PropertyReflectionLike {
         return this._property;
     }
@@ -160,23 +141,32 @@ export class ParameterReflection extends AbstractReflection implements Parameter
 
     toJSON(simple?: boolean) {
         if (simple) {
-            return {
-                ...{
-                    index: this._index,
-                    name: this._name,
-                    type: this._type?.name,
-                }, ...super.toJSON()
-            };
+            const rec = {index: this._index, method: this._property.toJSON(true)};
+            if (this._name) {
+                rec['name'] = this._name;
+            }
+            return rec;
         }
-        return {
-            ...{
-                __: ParameterReflection.name,
-                method: this._property.description,
-                index: this._index,
-                name: this._name,
-                type: this._type?.name,
-            }, ...super.toJSON()
-        };
+        const rec = {index: this._index, method: this._property.toJSON(true), ...super.toJSON()};
+        if (this._name) {
+            rec['name'] = this._name;
+        }
+        if (this._type) {
+            rec['type'] = fqnHandler.get(this._type);
+        }
+        if (this._hasDefault) {
+            rec['hasDefault'] = true;
+        }
+        if (this._isVariadic) {
+            rec['isVariadic'] = true;
+        }
+        if (this._proto) {
+            rec['proto'] = this._proto.toJSON(true);
+        }
+        if (this._clones) {
+            rec['clones'] = this._clones.map(p => p.toJSON(true));
+        }
+        return rec;
     }
 
 }

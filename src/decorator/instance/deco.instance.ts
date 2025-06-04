@@ -13,6 +13,7 @@ import {DecoKeyword} from "../abstract";
 import {Target} from "../literals";
 import {$$coreInternalOn} from "../../internal";
 import {FQN_PCK} from "../internal";
+import {CONSTRUCTOR} from "../../reflection/internal";
 
 
 export class DecoInstance<V = Dict, M = Dict, P = V> implements DecoInstanceLike<V, M, P> {
@@ -23,7 +24,6 @@ export class DecoInstance<V = Dict, M = Dict, P = V> implements DecoInstanceLike
     private _assigned: CoreReflectionLike;
     private _arguments: DecoArguments;
     private _description: string;
-    private _code: string;
 
     protected constructor() {
 
@@ -49,7 +49,7 @@ export class DecoInstance<V = Dict, M = Dict, P = V> implements DecoInstanceLike
         let keyword: DecoKeyword;
         let classFn: ClassLike = null;
         let prototype: Obj = null;
-        let memberName: PropertyKey = null;
+        let memberName: string = null;
         let methodFn: Func = null;
         let descriptor: PropertyDescriptor;
         let index: number;
@@ -78,7 +78,7 @@ export class DecoInstance<V = Dict, M = Dict, P = V> implements DecoInstanceLike
 
         // constructor parameter
         if (!args[1] && typeof args[2] === 'number') {
-            args[1] = 'constructor';
+            args[1] = CONSTRUCTOR;
             keyword = 'instance';
         }
 
@@ -96,7 +96,7 @@ export class DecoInstance<V = Dict, M = Dict, P = V> implements DecoInstanceLike
             ins._arguments = [targetObj];
         }
         else {
-            memberName = args[1] as PropertyKey;
+            memberName = args[1] as string;
             if (!memberName) {
                 throw $dev.invalidError({
                     issue: 'member.name.empty',
@@ -244,17 +244,6 @@ export class DecoInstance<V = Dict, M = Dict, P = V> implements DecoInstanceLike
         return this._identifier.name;
     }
 
-    get code(): string {
-        if (!this._code) {
-            if (this._clone) {
-                this._code = `${this._clone.name}/${this._assigned.code}`;
-            } else {
-                this._code = `${this._identifier.name}/${this._assigned.code}`;
-            }
-        }
-        return this._code;
-    }
-
     get target(): Target {
         return this._target;
     }
@@ -271,10 +260,6 @@ export class DecoInstance<V = Dict, M = Dict, P = V> implements DecoInstanceLike
 
 
     // region methods
-    info(detailed?: boolean): Dict {
-        return this._identifier.info(detailed);
-    }
-
     set(value?: V): CoreReflectionLike {
         this._assigned.setValue(this as DecoInstanceLike, value);
         return this._assigned;
@@ -395,23 +380,27 @@ export class DecoInstance<V = Dict, M = Dict, P = V> implements DecoInstanceLike
     // endregion parameter
 
     toJSON(simple?: boolean): any {
+        const rec = {};
         if (simple) {
-            return {
-                id: this._identifier?.name,
-                clone: this._clone?.name,
-                target: this._target,
-                assigned: this._assigned.description,
-                description: this._description,
-            };
+            if (this._clone) {
+                rec['decorator'] = this._clone.toJSON(true);
+            }
+            else {
+                rec['decorator'] = this._identifier.toJSON(true);
+            }
+            rec['description'] = this._description;
+            return rec;
         }
-        return {
-            __: DecoInstance.name,
-            id: this._identifier?.toJSON(true),
-            clone: this._clone?.toJSON(true),
-            target: this._target,
-            assigned: this._assigned.toJSON(true),
-            description: this._description,
-        };
+        if (this._clone) {
+            rec['deco'] = this._clone.toJSON(true);
+        }
+        else {
+            rec['id'] = this._identifier.toJSON(true);
+        }
+        rec['target'] = this._target;
+        rec['assigned'] = this._assigned.toJSON(true);
+        rec['description'] = this._description;
+        return rec;
     }
 }
 

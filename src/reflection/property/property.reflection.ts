@@ -1,5 +1,5 @@
 import "reflect-metadata";
-import {$assert, $dev, Dict, Func} from "@leyyo/common";
+import {$assert, $dev, Func} from "@leyyo/common";
 import {AbstractReflection} from "../abstract";
 import {ParameterReflection, ParameterReflectionLike} from "../parameter";
 import {
@@ -16,7 +16,8 @@ import {
 import {core} from "../../core";
 import {FootprintInspected} from "../../footprint";
 import {$$coreInternalOn} from "../../internal";
-import {FQN_PCK} from "../internal";
+import {CONSTRUCTOR, FQN_PCK} from "../internal";
+import {fqnHandler} from "../../index";
 
 
 // noinspection Annotator
@@ -24,7 +25,7 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
     // region properties
     private _clazz: ClassReflectionLike;
     private _callable: Func;
-    private _parameters: Array<ParameterReflectionLike> = [];
+    private _parameters: Array<ParameterReflectionLike>;
     private _keyword: DecoKeyword;
     private _kind: DecoKind;
     private _proto: PropertyReflectionLike;
@@ -34,7 +35,7 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
     // endregion properties
     // region methods
     static create(clazz: ClassReflectionLike, name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func): PropertyReflection {
-        const ins = new PropertyReflection(clazz.code, name as string, keyword, kind);
+        const ins = new PropertyReflection();
         ins._clazz = clazz;
         ins._name = name as string;
         ins._keyword = keyword;
@@ -48,14 +49,14 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
                 if (!ins._callable) {
                     ins._callable = ins._clazz.body[ins._name];
                 }
-                if (ins._name === 'constructor') {
+                if (ins._name === CONSTRUCTOR) {
                     ins._type = ins._clazz.creator as Func;
                 }
                 else {
                     ins._type = Reflect.getMetadata('design:returntype', ins._clazz.body, ins._name as string) as Func;
                 }
                 let params = Reflect.getMetadata('design:paramtypes', ins._clazz.body, ins._name as string) as Array<Func>;
-                if (!Array.isArray(params) && ins._name === 'constructor') {
+                if (!Array.isArray(params) && ins._name === CONSTRUCTOR) {
                     params = Reflect.getMetadata('design:paramtypes', ins._clazz.creator) as Array<Func>;
                 }
                 if (Array.isArray(params)) {
@@ -108,7 +109,7 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
         return ins;
     }
     static copy(clazz: ClassReflectionLike, source: PropertyReflectionLike): PropertyReflection {
-        const ins = new PropertyReflection(clazz.code, source.name, source.keyword, source.kind);
+        const ins = new PropertyReflection();
         ins._clazz = clazz;
         ins._name = source.name;
         ins._keyword = source.keyword;
@@ -130,31 +131,6 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
 
     // endregion methods
     // region getters
-    info(detailed?: boolean): Dict {
-        let rec = {
-            name: this._name,
-            description: this.description,
-            clazz: {'$ref': this._clazz.description}
-        } as Dict;
-        if (detailed) {
-            rec = {
-                ...rec,
-                ...super.info(true),
-                type: core.fqnHandler.detail(this._type),
-                keyword: this._keyword,
-                kind: this._kind
-            };
-        }
-        if (detailed && this._kind === "method") {
-            rec['callable'] = core.fqnHandler.detail(this._callable);
-            rec['parameters'] = this._parameters ? this._parameters.map(p => p.info(detailed)) : [];
-        }
-        if (this._proto) {
-            rec['proto'] = {'$ref': this._proto.description};
-        }
-        return rec;
-    }
-
     get description(): string {
         if (!this._description) {
             this._description = `<${this._kind}>${this._clazz.name}.${this._name as string} [${this._keyword}]`;
@@ -202,17 +178,22 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
             return undefined;
         }
         if (this._inspected === undefined) {
-            if (typeof this._callable === 'function') {
-                this._inspected = core.footprint.inspect(this._callable);
-            }
-            else if (this._keyword === 'static' && typeof this._clazz.creator[this._name] === 'function') {
-                    this._inspected = core.footprint.inspect(this._clazz.creator[this._name]);
-                }
-            else if (this._keyword === 'instance' && this._clazz.body && typeof this._clazz.body[this._name] === 'function') {
-                this._inspected = core.footprint.inspect(this._clazz.body[this._name]);
+            if (this._name === CONSTRUCTOR) {
+                this._inspected = core.footprint.inspect(this._clazz.creator);
             }
             else {
-                this._inspected = null;
+                if (typeof this._callable === 'function') {
+                    this._inspected = core.footprint.inspect(this._callable);
+                }
+                else if (this._keyword === 'static' && typeof this._clazz.creator[this._name] === 'function') {
+                    this._inspected = core.footprint.inspect(this._clazz.creator[this._name]);
+                }
+                else if (this._keyword === 'instance' && this._clazz.body && typeof this._clazz.body[this._name] === 'function') {
+                    this._inspected = core.footprint.inspect(this._clazz.body[this._name]);
+                }
+                else {
+                    this._inspected = null;
+                }
             }
         }
         return this._inspected === null ? undefined : this._inspected;
@@ -438,49 +419,52 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
 
     toJSON(simple?: boolean) {
         if (simple) {
-            if (this._kind === 'method') {
-                return {
-                    ...{
-                        name: this._name,
-                        kind: this._kind,
-                        keyword: this._keyword,
-                        returnType: this._type?.name,
-                        parameters: this._parameters ?? [],
-                    }, ...super.toJSON()
-                };
-            }
-            return {
-                ...{
-                    name: this._name,
-                    kind: this._kind,
-                    keyword: this._keyword,
-                    type: this._type?.name,
-                }, ...super.toJSON()
-            };
-        }
-        if (this._kind === 'method') {
-            return {
-                ...{
-                    __: PropertyReflection.name,
-                    clazz: this._clazz.name,
-                    name: this._name,
-                    kind: this._kind,
-                    keyword: this._keyword,
-                    returnType: this._type?.name,
-                    parameters: this._parameters ?? [],
-                }, ...super.toJSON()
-            };
-        }
-        return {
-            ...{
-                __: PropertyReflection.name,
-                clazz: this._clazz.name,
+            const rec2 = {
                 name: this._name,
                 kind: this._kind,
                 keyword: this._keyword,
-                type: this._type?.name,
-            }, ...super.toJSON()
+                clazz: this._clazz.toJSON(true),
+            };
+            if (this._kind === 'method') {
+                if (this._parameters) {
+                    rec2['parameters'] = this._parameters.map(p => {
+                        return {index: p.index, name: p.name};
+                    });
+                }
+            }
+            return rec2;
+        }
+        const rec = {
+            name: this._name,
+            kind: this._kind,
+            keyword: this._keyword,
+            clazz: this._clazz.toJSON(true),
+            ...super.toJSON(),
         };
+        if (this._kind === 'method') {
+            rec['inspected'] = this.inspected;
+            if (this._type) {
+                rec['returnType'] = fqnHandler.get(this._type);
+            }
+            if (this._callable) {
+                rec['callable'] = fqnHandler.get(this._callable);
+            }
+            if (this._parameters) {
+                rec['parameters'] = this._parameters.map(p => p.toJSON(true));
+            }
+        }
+        else {
+            if (this._type) {
+                rec['type'] = fqnHandler.get(this._type);
+            }
+        }
+        if (this._proto) {
+            rec['proto'] = this._proto.toJSON(true);
+        }
+        if (this._clones) {
+            rec['clones'] = this._clones.map(p => p.toJSON(true));
+        }
+        return rec;
     }
 
 }

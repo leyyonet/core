@@ -221,6 +221,28 @@ export class Lifecycle implements LifecycleLike {
         } as LifecycleBuilder;
         return result;
     }
+    toJSON(): any {
+        const rec = {};
+        this.items.forEach((items, stage) => {
+            if (Array.isArray(items) && items.length > 0) {
+                rec[stage] = [];
+                items.forEach(item => {
+                    const recItem = {name: item.name};
+                    if (item.isAsync) {
+                        recItem['isAsync'] = true;
+                    }
+                    if (Array.isArray(item.before) && item.before.length > 0) {
+                        recItem['before'] = item.before;
+                    }
+                    if (Array.isArray(item.after) && item.after.length > 0) {
+                        recItem['after'] = item.after;
+                    }
+                    (rec[stage] as Array<unknown>).push(recItem);
+                })
+            }
+        });
+        return rec;
+    }
 }
 
 $$coreInternalOn('class-pool-1', () => {

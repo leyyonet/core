@@ -1,4 +1,4 @@
-import {BasicType, Func, ShiftMain, ShiftSecure} from "@leyyo/common";
+import {BasicType, ClassLike, Func, ShiftMain, ShiftSecure} from "@leyyo/common";
 
 export interface FootprintLike extends ShiftSecure<FootprintSecure> {
     get(target: unknown, inspectWhenAbsent?: boolean): FootprintInspected;
@@ -18,7 +18,7 @@ export interface FootprintSecure extends ShiftMain<FootprintLike> {
 }
 
 export type FootprintKeyword = 'anonymous' | 'inherited' | 'proxied' // class
-    | 'arrow' | 'lambda' | 'generator' | 'async' | 'decorator' | 'system' | 'func' | 'method' | 'instance' | 'static' // function
+    | 'arrow' | 'lambda' | 'generator' | 'async' | 'decorator' | 'system' | 'func' | 'method' | 'instance' | 'static' | 'constructor' // function
     | 'enum' | 'literal' | 'possible' // enum
     | 'module' | 'namespace' | 'file' | 'object' // group
 

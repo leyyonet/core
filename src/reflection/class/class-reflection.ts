@@ -3,55 +3,40 @@ import {
     $descriptor,
     $dev,
     $is, $name,
-    $repo,
     $sys,
     ClassLike,
-    Dict,
-    Fnc,
     Func,
-    Obj,
-    PropDescriptor
+    Obj
 } from "@leyyo/common";
 import {AbstractReflection} from "../abstract";
 import {PropertyReflection, PropertyReflectionLike} from "../property";
-import {DecoArgumentClass, DecoFilter, DecoFilterKind, DecoKeyword, DecoKind} from "../../decorator";
+import {DecoFilter, DecoFilterKind, DecoKeyword, DecoKind} from "../../decorator";
 import {ClassReflectionCopyLambda, ClassReflectionLike, ClassReflectionSecure, CopyPropertyMixin} from "./index.types";
 import {core} from "../../core";
 import {FootprintInspected} from "../../footprint";
 import {$$coreInternalOn} from "../../internal";
-import {FQN_PCK} from "../internal";
-import {footprint} from "../../index";
+import {CONSTRUCTOR, FQN_PCK} from "../internal";
 
 
 // noinspection Annotator
 export class ClassReflection extends AbstractReflection implements ClassReflectionLike, ClassReflectionSecure {
     // region properties
-
+    private static readonly _EMPTY_PROPERTIES = new Map<string, PropertyReflectionLike>();
     private readonly _parent: ClassReflectionLike;
     private readonly _creator: ClassLike;
-    private readonly _instanceMap: Map<PropertyKey, PropertyReflectionLike>;
-    private readonly _staticMap: Map<PropertyKey, PropertyReflectionLike>;
     private readonly _body: Obj;
+    private readonly _instances = new Map<string, PropertyReflectionLike>();
+    private readonly _statics = new Map<string, PropertyReflectionLike>();
     private _inspected: FootprintInspected;
-    private _instanceCache: Map<PropertyKey, Array<PropertyReflectionLike>>;
-    private _staticCache: Map<PropertyKey, Array<PropertyReflectionLike>>;
     private static _functionProperties = [] as Array<string>;
     // endregion properties
     // region methods
     constructor(creator: ClassLike, prototype?: Obj, instances?: ClassReflectionCopyLambda, statics?: ClassReflectionCopyLambda) {
-        super(creator.name);
+        super();
         this._target = 'class';
-        this._instanceMap = $repo.newMap(FQN_PCK, this._code, 'instance');
-        this._staticMap = $repo.newMap(FQN_PCK, this._code, 'static');
         this._creator = creator;
         this._type = creator as Func;
         this._body = prototype ?? creator.prototype;
-        const aaa = Function.prototype.toString.call(creator);
-        this.setMetaKey('proto', aaa);
-        console.log(aaa);
-        const bbb = Reflect.getMetadata("design:paramtypes", creator) || [];
-        console.log(bbb);
-
 
         const prototypeOf = Object.getPrototypeOf(creator);
         if (prototypeOf && prototypeOf.name && !$sys.isSysClass(prototypeOf.name)) {
@@ -74,7 +59,11 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
             instances(this);
         }
         else {
+            let hasConstructor = false;
             Object.getOwnPropertyNames(creator.prototype).forEach(key => {
+                if (key === CONSTRUCTOR) {
+                    hasConstructor = true;
+                }
                 const desc = $descriptor.get(creator.prototype, key);
                 if (desc) {
                     let kind: DecoKind;
@@ -89,6 +78,9 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
                     this.$createProperty(key, 'instance', kind, callable);
                 }
             });
+            if (!hasConstructor) {
+                this.$createProperty(CONSTRUCTOR, 'instance', 'method', this._creator as Func);
+            }
         }
         // endregion instance-members
 
@@ -135,70 +127,32 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
 
     // endregion methods
     // region private
+    private _returnRecords(keyword: DecoKeyword): Map<string, PropertyReflectionLike> {
+        switch (keyword) {
+            case "instance":
+                return this._instances;
+            case "static":
+                return this._statics;
+            default:
+                return ClassReflection._EMPTY_PROPERTIES;
+        }
+    }
     protected _listProperties(keyword: DecoKeyword, filter?: DecoFilterKind): Array<PropertyReflectionLike> {
-        let props: Array<PropertyReflectionLike>;
         filter = this._filter(filter, 'kind');
-        const key = `${this.name}~${keyword}~${filter.kind ?? ''}`;
-
-        let cache: Map<PropertyKey, Array<PropertyReflectionLike>>;
-        if (keyword === 'instance') {
-            if (!this._instanceCache) {
-                this._instanceCache = $repo.newMap(FQN_PCK, this._code, 'instanceCache');
-            }
-            cache = this._instanceCache;
-        }
-        else {
-            if (!this._staticCache) {
-                this._staticCache = $repo.newMap(FQN_PCK, this._code, 'staticCache');
-            }
-            cache = this._staticCache;
-        }
-        if (cache.has(key)) {
-            return cache.get(key);
-        }
-        const ins = (keyword === "instance");
-        // 'listInstanceProperties', '_instanceMap'
-        props = Array.from((ins ? this._instanceMap : this._staticMap).values());
+        let props = Array.from(this._returnRecords(keyword).values());
         if (filter.kind) {
             props = props.filter(prop => prop.filterByKind(filter));
         }
-        cache.set(key, props);
         return props;
     }
 
     // endregion private
     // region getters
-    info(detailed?: boolean): Dict {
-        const rec = {
-            ...{
-                name: this.name,
-                creator: core.fqnHandler.detail(this._creator),
-                body: detailed ? core.fqnHandler.detail(this._body) : undefined,
-                instances: [],
-                statics: []
-            }, ...super.info(detailed)
-        };
-        if (this._parent) {
-            rec['parent'] = {'$ref': this._parent.description};
-        }
-        for (const [, prop] of this._instanceMap.entries()) {
-            rec.instances.push(prop.info(detailed));
-        }
-        for (const [, prop] of this._staticMap.entries()) {
-            rec.statics.push(prop.info(detailed));
-        }
-        return rec;
-    }
-
     get name(): string {
         if (!this._name) {
             this._name = core.fqnHandler.get(this._creator);
         }
         return this._name;
-    }
-
-    get code(): string {
-        return this.name;
     }
 
 
@@ -235,6 +189,9 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
         return this._listProperties("instance", filter);
     }
 
+    getConstructor(): PropertyReflectionLike {
+        return this.getInstanceProperty(CONSTRUCTOR, {kind: 'method'});
+    }
     getInstanceProperty(name: PropertyKey, filter?: DecoFilterKind): PropertyReflectionLike {
         const props = this.listInstanceProperties(filter).filter(prop => prop.name === name);
         return props.length > 0 ? props[0] : null;
@@ -422,23 +379,23 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
         }
         Object.defineProperty(targetProto, key, descriptor);
     }
+
     $copyProperty(source: PropertyReflectionLike): PropertyReflectionLike {
         const name = source.name;
+        const records = this._returnRecords(source.keyword);
         switch (source.keyword) {
             case "instance":
-                if (!this._instanceMap.has(name)) {
-                    const ins = PropertyReflection.copy(this, source);
-                    this._instanceMap.set(name, ins);
+                if (!records.has(source.name)) {
+                    records.set(source.name, PropertyReflection.copy(this, source));
                     this._defineProperty(name, source.clazz.creator.prototype, this.creator.prototype, source.callable);
                 }
-                return this._instanceMap.get(source.name);
+                return records.get(source.name);
             case "static":
-                if (!this._staticMap.has(source.name)) {
-                    const ins = PropertyReflection.copy(this, source);
-                    this._staticMap.set(source.name, ins);
+                if (!records.has(source.name)) {
+                    records.set(source.name, PropertyReflection.copy(this, source));
                     this._defineProperty(name, source.clazz.creator, this.creator, source.callable);
                 }
-                return this._staticMap.get(source.name);
+                return records.get(source.name);
             default:
                 throw $dev.developerError({
                     issue: 'invalid.keyword',
@@ -449,20 +406,15 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
                 });
         }
     }
-    $createProperty(name: PropertyKey, keyword: DecoKeyword, kind: DecoKind, callable?: Func): PropertyReflectionLike {
+    $createProperty(name: string, keyword: DecoKeyword, kind: DecoKind, callable?: Func): PropertyReflectionLike {
         switch (keyword) {
             case "instance":
-                if (!this._instanceMap.has(name)) {
-                    const ins = PropertyReflection.create(this, name, keyword, kind, callable);
-                    this._instanceMap.set(name, ins);
-                }
-                return this._instanceMap.get(name);
             case "static":
-                if (!this._staticMap.has(name)) {
-                    const ins = PropertyReflection.create(this, name, keyword, kind, callable);
-                    this._staticMap.set(name, ins);
+                const records = this._returnRecords(keyword);
+                if (!records.has(name)) {
+                    records.set(name, PropertyReflection.create(this, name, keyword, kind, callable));
                 }
-                return this._staticMap.get(name);
+                return records.get(name);
             default:
                 throw $dev.developerError({
                     issue: 'invalid.keyword',
@@ -474,27 +426,16 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
         }
     }
 
-    $deleteProperty(name: PropertyKey, keyword: DecoKeyword): boolean {
-        let deleted = false;
+    $deleteProperty(name: string, keyword: DecoKeyword): boolean {
         switch (keyword) {
             case "instance":
-                if (this._instanceMap.has(name)) {
-                    this._instanceMap.delete(name);
-                    deleted = true;
-                }
-                if (this._instanceCache && this._instanceCache.has(name)) {
-                    this._instanceCache.delete(name);
-                }
-                return deleted;
             case "static":
-                if (this._staticMap.has(name)) {
-                    this._staticMap.delete(name);
-                    deleted = true;
+                const records = this._returnRecords(keyword);
+                if (records.has(name)) {
+                    return false;
                 }
-                if (this._staticCache && this._staticCache.has(name)) {
-                    this._staticCache.delete(name);
-                }
-                return deleted;
+                records.delete(name);
+                return true;
             default:
                 const d1 = this.$deleteProperty(name, 'instance');
                 const d2 = this.$deleteProperty(name, 'static');
@@ -507,25 +448,33 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
     toJSON(simple?: boolean) {
         if (simple) {
             return {
-                ...{
-                    parent: this._parent?.description,
-                    creator: this._creator?.name,
-                    instanceMembers: Array.from(this._instanceMap.values()).map(c => c.toJSON(true)),
-                    staticMembers: Array.from(this._staticMap.values()).map(c => c.toJSON(true))
-                }, ...super.toJSON()
+                name: this.name,
             };
         }
-        return {
-            ...{
-                __: ClassReflection.name,
-                parent: this._parent?.description,
-                creator: this._creator?.name,
-                inspected: this.inspected,
-
-                instanceMembers: Array.from(this._instanceMap.values()),
-                staticMembers: Array.from(this._staticMap.values()),
-            }, ...super.toJSON()
+        const rec = {
+            name: this.name,
+            ...super.toJSON(),
+            inspected: this.inspected,
         };
+        if (this._body) {
+            rec['prototype'] = $dev.secureJson(this._body);
+        }
+        try {
+            rec['body'] = Function.prototype.toString.call(this._creator);
+        } catch (e) {
+            console.error(e.message);
+        }
+
+        if (this._parent) {
+            rec['parent'] = this._parent.description;
+        }
+        if (this._instances.size > 0) {
+            rec['instances'] = Array.from(this._instances.values()).map(c => c.toJSON(true));
+        }
+        if (this._statics.size > 0) {
+            rec['statics'] = Array.from(this._statics.values()).map(c => c.toJSON(true));
+        }
+        return rec;
     }
 }
 

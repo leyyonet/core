@@ -16,6 +16,7 @@ import {
 import {core} from "../core";
 import {$$coreInternalOn} from "../internal";
 import {FQN_PCK} from "./internal";
+import {fqnHandler} from "../index";
 
 /**
  * {@inheritDoc}
@@ -466,6 +467,30 @@ export class NamedDepot<V extends NamedDepotValue, P extends NamedDepotValue> im
     }
 
     // endregion secure
+
+    // noinspection JSUnusedGlobalSymbols
+    toJSON(): any {
+        const rec = {bucket: this.bucket, bases: [], aliases: []};
+        rec.bases = this.$bases.map(b => {
+            const item = {id: b.id,  value: fqnHandler.get(b.value), naming: {basic: b.basic, pck: b.pck}};
+            if (Array.isArray(b.aliases) && b.aliases.length > 0) {
+                item['aliases'] = b.aliases;
+            }
+            if (Array.isArray(b.pointers) && b.pointers.length > 0) {
+                item['pointers'] = b.pointers.map(p => fqnHandler.get(p));
+            }
+            return item;
+        });
+        this.$aliases.forEach((item, alias) => {
+            rec.aliases.push({
+                alias,
+                id: item.id,
+                type: item.nameType,
+            })
+            return item;
+        });
+        return rec;
+    }
 
 }
 

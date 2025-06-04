@@ -31,19 +31,23 @@ export const DecoRuleItems = [
     'no-inherited',
 
     /*
+    * If a target has already same decorator, and existing is not inherited than throws an error
+    * */
+    'no-multiple', // deprecated
+    'on-exist:error',
+
+    /*
     * If a target has already same decorator, the next one will be ignored even if existing is inherited one
     * */
-    'ignore-if-exists',
+    'ignore-if-exists', // deprecated
+    'on-exist:ignore',
 
     /*
     * If a target has already same decorator, the next one will override existing
     * */
-    'override-if-exists',
+    'override-if-exists', // deprecated
+    'on-exist:override',
 
-    /*
-    * If a target has already same decorator, and existing is not inherited than throws an error
-    * */
-    'no-multiple',
 
     /*
     * If a target has already same decorator, the next one's value will be appended into existing
