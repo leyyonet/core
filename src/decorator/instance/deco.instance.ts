@@ -76,12 +76,18 @@ export class DecoInstance<V = Dict, M = Dict, P = V> implements DecoInstanceLike
         let forField: boolean;
         // if (typeof FNC !== 'function') {throw new Error('UnknownTargetError');}
 
+        // constructor parameter
+        if (!args[1] && typeof args[2] === 'number') {
+            args[1] = 'constructor';
+            keyword = 'instance';
+        }
+
         // console.info(decoratorName, args);
         if (!args[1]) {
             ins._target = 'class';
             if (!(clone ?? identifier).hasTarget('class')) {
                 throw $dev.developerError({
-                    issue: 'not.allowed.target',
+                    issue: 'not.allowed.target-class:' + identifier.name,
                     where: 'leyyo.decorator.DecoInstance',
                     target: ins._target,
                     clazz: classFn?.name
@@ -106,7 +112,7 @@ export class DecoInstance<V = Dict, M = Dict, P = V> implements DecoInstanceLike
                 ins._target = 'parameter';
                 if (!(clone ?? identifier).hasTarget('parameter')) {
                     throw $dev.developerError({
-                        issue: 'not.allowed.target',
+                        issue: 'not.allowed.target-parameter:' + identifier.name,
                         where: 'leyyo.decorator.DecoInstance',
                         target: ins._target,
                         clazz: classFn?.name,
@@ -123,7 +129,7 @@ export class DecoInstance<V = Dict, M = Dict, P = V> implements DecoInstanceLike
                     methodFn = (args[2] as PropertyDescriptor).value; // method function
                     if (!(clone ?? identifier).hasTarget('method')) {
                         throw $dev.developerError({
-                            issue: 'not.allowed.target',
+                            issue: 'not.allowed.target-method:' + identifier.name,
                             where: 'leyyo.decorator.DecoInstance',
                             target: ins._target,
                             clazz: classFn?.name,
@@ -149,7 +155,7 @@ export class DecoInstance<V = Dict, M = Dict, P = V> implements DecoInstanceLike
         if (forField) {
             if (!(clone ?? identifier).hasTarget('field')) {
                 throw $dev.developerError({
-                    issue: 'not.allowed.target',
+                    issue: 'not.allowed.target-field:' + identifier.name,
                     where: 'leyyo.decorator.DecoInstance',
                     target: ins._target,
                     clazz: classFn?.name,

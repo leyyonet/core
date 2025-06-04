@@ -290,7 +290,7 @@ export abstract class AbstractReflection implements CoreReflectionLike {
         return this;
     }
     setValue<V extends Dict>(ins: DecoInstanceLike, value: V): this {
-        this._appendValue(ins, value, (ins.assigned === this), false);
+        this._appendValue(ins, value, (ins.assigned !== this), false);
         return this;
     }
 

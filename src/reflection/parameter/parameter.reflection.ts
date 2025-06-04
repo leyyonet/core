@@ -21,26 +21,39 @@ export class ParameterReflection extends AbstractReflection implements Parameter
 
     // endregion properties
 
-    static create(property: PropertyReflectionLike, index: number, type: Func): ParameterReflection {
+    static create(property: PropertyReflectionLike, index: number, type: Func, name?: string): ParameterReflection {
+        if (property.hasParameter(index)) {
+            throw $dev.developerError2(FQN_PCK, 100, {
+                message: 'Index was already defined',
+                property: property.description,
+                index,
+            });
+        }
         const ins = new ParameterReflection(property.code, index);
         ins._target = 'parameter';
         ins._property = property;
-
         ins._index = index;
         ins._type = typeof type === 'function' ? type : undefined;
 
-        if (property.inspected?.params && property.inspected?.params[index]) {
-            const param = property.inspected.params[index];
-            if (Array.isArray(param)) {
-                ins._name = param[0];
-                if (param[1] === 'default') {
-                    ins._hasDefault = true;
-                } else if (param[1] === 'variadic') {
-                    ins._isVariadic = true;
+        if (!name) {
+            if (property.inspected?.params && property.inspected?.params[index]) {
+                const param = property.inspected.params[index];
+                if (param) {
+                    if (Array.isArray(param)) {
+                        ins._name = param[0];
+                        if (param[1] === 'default') {
+                            ins._hasDefault = true;
+                        } else if (param[1] === 'variadic') {
+                            ins._isVariadic = true;
+                        }
+                    } else {
+                        ins._name = param;
+                    }
                 }
-            } else {
-                ins._name = param;
             }
+        }
+        else {
+            ins._name = name;
         }
         return ins;
     }

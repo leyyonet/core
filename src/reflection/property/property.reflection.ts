@@ -8,9 +8,6 @@ import {
 } from "./index.types";
 import {ClassReflectionLike} from "../class";
 import {
-    DecoArgumentField,
-    DecoArgumentMethod,
-    DecoDoc,
     DecoFilterKeyword,
     DecoFilterKind,
     DecoKeyword,
@@ -51,8 +48,16 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
                 if (!ins._callable) {
                     ins._callable = ins._clazz.body[ins._name];
                 }
-                ins._type = Reflect.getMetadata('design:returntype', ins._clazz.body, ins._name as string) as Func;
-                const params = Reflect.getMetadata('design:paramtypes', ins._clazz.body, ins._name as string) as Array<Func>;
+                if (ins._name === 'constructor') {
+                    ins._type = ins._clazz.creator as Func;
+                }
+                else {
+                    ins._type = Reflect.getMetadata('design:returntype', ins._clazz.body, ins._name as string) as Func;
+                }
+                let params = Reflect.getMetadata('design:paramtypes', ins._clazz.body, ins._name as string) as Array<Func>;
+                if (!Array.isArray(params) && ins._name === 'constructor') {
+                    params = Reflect.getMetadata('design:paramtypes', ins._clazz.creator) as Array<Func>;
+                }
                 if (Array.isArray(params)) {
                     paramsListed = true;
                     params.forEach((type, i) => {
@@ -218,16 +223,40 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
     listParameters(): Array<ParameterReflectionLike> {
         return this._parameters ? [...this._parameters] : [];
     }
-
-    hasParameter(index: number): boolean {
-        return this._parameters ? this._parameters[index] !== undefined : false;
+    get parameters(): Array<ParameterReflectionLike> {
+        return this._parameters ? [...this._parameters] : [];
     }
 
-    getParameter(index: number): ParameterReflectionLike {
-        return this._parameters ? this._parameters[index] : undefined;
+    hasParameter(value: number|string): boolean {
+        this._checkField('parameters');
+        if (!this._parameters) {
+            return false;
+        }
+        if (typeof value === 'number') {
+            return !!this._parameters[value];
+        }
+        if (typeof value === 'string') {
+            return this._parameters.filter(p => p.name === value).length > 0;
+        }
+        return false;
+    }
+
+    getParameter(value: number|string): ParameterReflectionLike {
+        this._checkField('parameters');
+        if (!this._parameters) {
+            return undefined;
+        }
+        if (typeof value === 'number') {
+            return this._parameters[value];
+        }
+        if (typeof value === 'string') {
+            return this._parameters.filter(p => p.name === value)[0];
+        }
+        return undefined;
     }
 
     parametersBy(decorator: Func | string): Array<ParameterReflectionLike> {
+        this._checkField('parameters');
         const id = core.decoratorPool.get(decorator, false);
         if (!id) {
             return [];
@@ -295,12 +324,45 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
     }
 
     $copyParameter(source: ParameterReflectionLike): ParameterReflectionLike {
+        this._checkField('parameters');
         const param = ParameterReflection.copy(this, source);
         this._parameters.push(param);
         return param;
     }
-    $createParameter(index: number, type: Func): ParameterReflectionLike {
-        const param = ParameterReflection.create(this, index, type);
+
+    private _checkField(field: keyof PropertyReflectionLike): void {
+        if (this._kind === 'field') {
+            throw $dev.developerError2(FQN_PCK, 100, {
+                message: 'Fields can not have this property',
+                field,
+                desc: this.description,
+            });
+        }
+    }
+    $createParameter(index?: number, type?: Func, name?: string): ParameterReflectionLike {
+        this._checkField('parameters');
+        if (index !== undefined) {
+            $assert.integer(index, () => [FQN_PCK, 100, {
+                field: 'index',
+                desc: this.description
+            }]);
+            $assert.nonNegative(index, () => [FQN_PCK, 100, {
+                field: 'index',
+                desc: this.description
+            }]);
+        }
+        else {
+            index = this._parameters.length;
+        }
+        $assert.funcOptional(type, () => [FQN_PCK, 100, {
+            field: 'type',
+            desc: this.description
+        }]);
+        $assert.textOptional(name, () => [FQN_PCK, 100, {
+            field: 'name',
+            desc: this.description
+        }]);
+        const param = ParameterReflection.create(this, index, type, name);
         this._parameters.push(param);
         return param;
     }
@@ -352,20 +414,13 @@ export class PropertyReflection extends AbstractReflection implements PropertyRe
     }
 
     $setCallable(callable: Func): this {
+        this._checkField('callable');
         $assert.func(callable, () => $dev.opt({
             name: this.description,
             field: 'callable',
             method: '$setCallable',
             where: 'leyyo.reflection.PropertyReflection'
         }));
-        if (this._target !== 'method') {
-            throw $dev.developerError({
-                issue: 'field.callable.can.not.be.changed',
-                target: this._target,
-                method: '$setCallable',
-                where: 'leyyo.reflection.PropertyReflection'
-            });
-        }
         if (this._callable && this._callable !== callable) {
             let index = 0;
             while (this.hasMetaKey(`$callable-${index}`)) {

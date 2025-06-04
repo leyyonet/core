@@ -46,6 +46,13 @@ export class ClassReflection extends AbstractReflection implements ClassReflecti
         this._creator = creator;
         this._type = creator as Func;
         this._body = prototype ?? creator.prototype;
+        const aaa = Function.prototype.toString.call(creator);
+        this.setMetaKey('proto', aaa);
+        console.log(aaa);
+        const bbb = Reflect.getMetadata("design:paramtypes", creator) || [];
+        console.log(bbb);
+
+
         const prototypeOf = Object.getPrototypeOf(creator);
         if (prototypeOf && prototypeOf.name && !$sys.isSysClass(prototypeOf.name)) {
             this._parent = core.reflectionPool.registerClass(prototypeOf);

@@ -81,12 +81,21 @@ export interface PropertyReflectionLike extends CoreReflectionLike, ShiftSecure<
      * Returns parameters
      * */
     listParameters(): Array<ParameterReflectionLike>;
+    get parameters(): Array<ParameterReflectionLike>;
 
+    /**
+     * Have method a parameter with given name?
+     * */
+    hasParameter(name: string): boolean;
     /**
      * Have method a parameter with given index?
      * */
     hasParameter(index: number): boolean;
 
+    /**
+     * Returns parameter with given name?
+     * */
+    getParameter(name: string): ParameterReflectionLike;
     /**
      * Returns parameter with given index?
      * */
@@ -122,7 +131,7 @@ export interface PropertyReflectionSecure extends ShiftMain<PropertyReflectionLi
     $setType(type: Func): this;
     $setProto(proto: PropertyReflectionLike): this;
     $copyParameter(source: ParameterReflectionLike): ParameterReflectionLike;
-    $createParameter(index: number, type: Func): ParameterReflectionLike;
+    $createParameter(index?: number, type?: Func, name?: string): ParameterReflectionLike;
 
     $setCallable(callable: Func): this;
 
